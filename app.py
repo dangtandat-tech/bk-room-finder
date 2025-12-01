@@ -7,17 +7,18 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (TỐI ƯU DARK MODE & NÚT BẤM RỘNG) ---
+# --- 2. CSS (FINAL V30 - DARK MODE & CLEAN BUTTON) ---
 st.markdown("""
 <style>
-    /* Card Container */
+    /* 1. CARD CONTAINER */
     .room-card-box {
-        /* Dùng màu nền sáng nhẹ để nổi bật trên nền đen của Dark Mode */
-        background-color: #ffffff; 
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border: 1px solid rgba(0,0,0,0.1);
-        margin-bottom: 15px;
+        /* Dùng màu nền phụ của Streamlit: Tự động xám nhẹ ở Light Mode, xám tối ở Dark Mode */
+        background-color: var(--secondary-background-color);
+        border-radius: 10px;
+        /* Viền mờ sử dụng rgba để hợp với mọi nền */
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 12px;
         overflow: hidden;
         transition: transform 0.2s, box-shadow 0.2s;
         height: 100%;
@@ -25,21 +26,20 @@ st.markdown("""
         flex-direction: column;
     }
     
-    /* Hiệu ứng Hover */
     .room-card-box:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.15);
-        border-color: #0d6efd;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        border-color: rgba(13, 110, 253, 0.5); /* Viền xanh khi hover */
     }
 
-    /* Dải màu trạng thái */
-    .status-strip-free { border-left: 6px solid #28a745; }
-    .status-strip-soon { border-left: 6px solid #ffc107; }
-    .status-strip-busy { border-left: 6px solid #dc3545; }
+    /* 2. DẢI MÀU TRẠNG THÁI (Viền trái đậm hơn chút) */
+    .status-strip-free { border-left: 5px solid #28a745; }
+    .status-strip-soon { border-left: 5px solid #ffc107; }
+    .status-strip-busy { border-left: 5px solid #dc3545; }
 
-    /* Nội dung Card */
+    /* 3. NỘI DUNG CARD */
     .card-body {
-        padding: 15px 18px; /* Tăng khoảng cách lề */
+        padding: 16px;
         flex-grow: 1;
     }
 
@@ -47,61 +47,78 @@ st.markdown("""
     .room-name {
         font-size: 1.3rem;
         font-weight: 800;
-        color: #212529; /* Màu chữ đậm luôn dễ đọc trên nền trắng */
-        margin-bottom: 8px;
-        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        /* Màu chữ tự động theo theme */
+        color: var(--text-color); 
     }
     
     /* Badge trạng thái */
     .status-badge {
-        font-size: 0.75rem;
-        padding: 4px 10px;
+        font-size: 0.7rem;
+        padding: 3px 8px;
         border-radius: 12px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    .badge-free { background-color: #d1fae5; color: #065f46; }
-    .badge-soon { background-color: #fff3cd; color: #856404; }
-    .badge-busy { background-color: #f8d7da; color: #721c24; }
+    /* Dùng rgba để badge xuyên thấu nhẹ, đẹp trên cả nền tối */
+    .badge-free { background-color: rgba(40, 167, 69, 0.15); color: #28a745; }
+    .badge-soon { background-color: rgba(255, 193, 7, 0.15); color: #d39e00; }
+    .badge-busy { background-color: rgba(220, 53, 69, 0.15); color: #dc3545; }
 
     /* Thông tin chính */
     .info-primary {
-        font-size: 1rem; color: #333; margin-bottom: 5px; font-weight: 600;
+        font-size: 1rem;
+        margin-bottom: 4px;
+        font-weight: 600;
+        color: var(--text-color);
+        opacity: 0.95;
     }
     .info-secondary {
-        font-size: 0.9rem; color: #666;
+        font-size: 0.85rem;
+        color: var(--text-color);
+        opacity: 0.7; /* Làm mờ text phụ */
     }
 
-    /* Nút bấm (Footer) - Đã chỉnh rộng hơn */
+    /* 4. NÚT BẤM (CLEAN / GHOST STYLE) */
     div.stButton > button {
         width: 100%;
-        border: none;
-        background-color: #f8f9fa; /* Nền xám rất nhạt */
-        color: #0d6efd; /* Màu xanh link */
+        border: none !important; /* BỎ VIỀN HOÀN TOÀN */
+        background-color: transparent !important; /* NỀN TRONG SUỐT */
+        color: #0d6efd !important; /* Chữ màu xanh */
         font-size: 0.9rem;
         font-weight: 600;
-        padding: 12px 0; /* Tăng padding để nút cao và thoáng hơn */
+        padding: 10px 0;
         margin: 0 !important;
-        border-top: 1px solid #eee;
-        transition: background-color 0.2s;
-        border-radius: 0 0 12px 12px !important; /* Bo góc dưới khớp với card */
+        border-top: 1px solid rgba(128, 128, 128, 0.1) !important; /* Gạch ngang mờ ngăn cách */
+        border-radius: 0 !important;
+        transition: all 0.2s;
     }
     div.stButton > button:hover {
-        background-color: #e9ecef;
-        color: #0a58ca;
+        background-color: rgba(13, 110, 253, 0.05) !important; /* Hover lên màu xanh rất nhạt */
+        color: #0a58ca !important;
+        letter-spacing: 0.5px; /* Hiệu ứng giãn chữ nhẹ khi hover */
     }
     
-    /* Layout */
+    /* 5. CÁC THÀNH PHẦN KHÁC */
     div[data-testid="column"] { padding: 0 8px; }
+    
     .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
+        background-color: var(--secondary-background-color);
+        padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; 
+        border: 1px solid rgba(128, 128, 128, 0.1);
+        text-align: center;
     }
+    
     .schedule-item {
-        background: white; border-left: 4px solid #007bff;
+        background-color: var(--secondary-background-color);
+        border-left: 4px solid #0d6efd;
         padding: 12px; margin-bottom: 10px; border-radius: 6px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05); color: #333;
+        border: 1px solid rgba(128, 128, 128, 0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -197,11 +214,9 @@ def load_and_process():
 
     df['Parsed_Weeks'] = df['MY_WEEK'].apply(lambda x: ",".join(map(str, parse_weeks(x))))
 
-    # --- FIX NHA A: Thêm .strip() để xử lý khoảng trắng thừa ---
     def extract_building(room_name):
         s = str(room_name).strip()
-        if '-' in s: 
-            return s.split('-')[0].strip() # Thêm .strip() ở đây
+        if '-' in s: return s.split('-')[0]
         return "Khác"
     df['Building'] = df['MY_ROOM'].apply(extract_building)
     return df
@@ -211,7 +226,7 @@ if 'view_mode' not in st.session_state: st.session_state.view_mode = 'list'
 if 'selected_room_data' not in st.session_state: st.session_state.selected_room_data = None
 if 'current_time' not in st.session_state: st.session_state.current_time = datetime.now(TZ_VN)
 
-# --- DEFAULT D3 (FIX RESET) ---
+# DEFAULT D3
 if 'selected_building_state' not in st.session_state:
     st.session_state.selected_building_state = "D3"
 
@@ -248,20 +263,17 @@ if st.session_state.view_mode == 'list':
                 st.session_state.current_time = datetime.now(TZ_VN)
                 st.rerun()
 
-    # --- LOGIC CHỌN TÒA (DEFAULT D3) ---
+    # BUILDING SELECT
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
-    try:
-        def_idx = buildings.index(st.session_state.selected_building_state)
-    except:
-        def_idx = 0
-        
+    try: def_idx = buildings.index(st.session_state.selected_building_state)
+    except: def_idx = 0
     sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings, index=def_idx, key="sel_b")
-    st.session_state.selected_building_state = sel_b # Lưu lại lựa chọn
+    st.session_state.selected_building_state = sel_b
 
     st.markdown(f"""
     <div class="header-info">
-        <h3 style="margin:0; color:#d63384">{now.strftime('%H:%M')} | Thứ {curr_wd} | {now.strftime('%d/%m/%Y')}</h3>
-        <p style="margin:0; font-size:1.1rem; opacity:0.8">Tuần học: <b>{curr_week}</b></p>
+        <h3 style="margin:0; color:var(--text-color)">{now.strftime('%H:%M')} | Thứ {curr_wd} | {now.strftime('%d/%m/%Y')}</h3>
+        <p style="margin:0; font-size:1.1rem; opacity:0.8; color:var(--text-color)">Tuần học: <b>{curr_week}</b></p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -322,7 +334,7 @@ if st.session_state.view_mode == 'list':
                     else: 
                         css_cls, badge_cls, badge_txt = "status-strip-busy", "badge-busy", "ĐANG HỌC"
                     
-                    code_info = f"Mã: {item['code']}" if item['code'] and item['code'] != "NULL" else ""
+                    code_info = f"Mã: {item['code']}" if item['code'] and str(item['code']) != "NULL" else ""
 
                     st.markdown(f"""
                     <div class="room-card-box {css_cls}">
@@ -338,7 +350,8 @@ if st.session_state.view_mode == 'list':
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button("Xem chi tiết ▾", key=f"btn_{item['r']}_{idx}"):
+                    # Nút bấm Clean (Không viền, text xanh)
+                    if st.button("Xem chi tiết ➜", key=f"btn_{item['r']}_{idx}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.rerun()
@@ -373,12 +386,12 @@ elif st.session_state.view_mode == 'detail':
             <div class="schedule-item">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <div style="font-weight:700; font-size:1.1rem; color:#333">Thứ {d}</div>
-                        <div style="color:#666; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
+                        <div style="font-weight:700; font-size:1.1rem; opacity:0.9">Thứ {d}</div>
+                        <div style="opacity:0.7; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
                     </div>
                     <div style="text-align:right">
-                        <div style="color:#007bff; font-weight:600">{row['MY_NAME']}</div>
-                        <div style="font-size:0.8rem; color:#888;">Mã lớp: {row['MY_CODE']}</div>
+                        <div style="color:#0d6efd; font-weight:600">{row['MY_NAME']}</div>
+                        <div style="font-size:0.8rem; opacity:0.8;">Mã lớp: <b>{row['MY_CODE']}</b></div>
                     </div>
                 </div>
             </div>
