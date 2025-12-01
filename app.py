@@ -7,39 +7,74 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS ---
+# --- 2. CSS (GIAO DIỆN CARD LIỀN KHỐI - ĐẸP NHẤT) ---
 st.markdown("""
 <style>
+    /* Card Top (Thông tin) */
     .card-top {
-        padding: 12px 15px; border-top-left-radius: 12px; border-top-right-radius: 12px;
-        color: white; position: relative;
+        padding: 12px 15px;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        color: white;
+        position: relative;
     }
+    
+    /* Màu nền */
     .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
     .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
     .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
-    .room-header { font-size: 1.3rem; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
-    .room-info { font-size: 0.9rem; margin-top: 6px; line-height: 1.4; opacity: 0.95; font-weight: 500; }
-    .code-badge { font-size: 0.75rem; background: rgba(255,255,255,0.25); padding: 3px 8px; border-radius: 6px; font-weight: bold; }
+
+    /* Typography */
+    .room-header { 
+        font-size: 1.3rem; font-weight: 800; 
+        display: flex; justify-content: space-between; align-items: center; 
+    }
+    .room-info { 
+        font-size: 0.9rem; margin-top: 6px; 
+        line-height: 1.4; opacity: 0.95; font-weight: 500;
+    }
     
+    /* Badge Mã Lớp */
+    .code-badge { 
+        font-size: 0.75rem; 
+        background: rgba(255,255,255,0.25); 
+        padding: 3px 8px; 
+        border-radius: 6px; 
+        font-weight: bold; 
+        border: 1px solid rgba(255,255,255,0.4);
+        min-width: 60px;
+        text-align: center;
+    }
+
+    /* Nút bấm chìm bên dưới (Fix lỗi giao diện) */
     div.stButton > button {
-        width: 100%; border-radius: 0 0 12px 12px !important; border: 1px solid #e0e0e0;
-        border-top: none; background-color: #ffffff; color: #666; font-size: 0.85rem;
-        padding: 8px 0; margin-top: -15px !important; transition: all 0.2s;
+        width: 100%;
+        border-radius: 0 0 12px 12px !important;
+        border: 1px solid #e0e0e0;
+        border-top: none;
+        background-color: #ffffff;
+        color: #666;
+        font-size: 0.85rem;
+        padding: 8px 0;
+        margin-top: -16px !important; /* Kéo lên dính vào card */
+        transition: all 0.2s;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     div.stButton > button:hover {
         background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
         box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
     }
+    
+    /* Layout */
     div[data-testid="column"] { padding: 0 6px; }
+    .header-info {
+        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
+    }
     .schedule-item {
         background: white; border-left: 5px solid #0d6efd;
         padding: 15px; margin-bottom: 12px; border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
-    }
-    .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -76,19 +111,26 @@ def clean_day(v):
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- 4. LOAD DATA ---
+# --- 4. LOAD DATA (DÙNG st.cache_data CHO BẢN MỚI) ---
 @st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
     dfs = []
     encodings = ['utf-8-sig', 'utf-16', 'utf-8', 'cp1258', 'latin1']
+    
     server_files = os.listdir()
     
     for f in files:
+        # Cơ chế tìm file không phân biệt hoa thường (Linux fix)
         if not os.path.exists(f):
+            found = False
             for sf in server_files:
-                if sf.lower() == f.lower(): f = sf; break
-            else: continue
+                if sf.lower() == f.lower():
+                    f = sf
+                    found = True
+                    break
+            if not found: continue
+            
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -140,6 +182,7 @@ def load_and_process():
         if '-' in s: return s.split('-')[0]
         return "Khác"
     df['Building'] = df['MY_ROOM'].apply(extract_building)
+    
     return df
 
 # --- 5. APP LOGIC ---
@@ -155,9 +198,10 @@ except Exception as e:
     st.stop()
 
 if df.empty:
-    st.warning("Chưa tải được dữ liệu.")
+    st.warning("Chưa tải được dữ liệu. Vui lòng kiểm tra file trên GitHub.")
     st.stop()
 
+# Time Logic
 now = st.session_state.current_time
 now_naive = now.replace(tzinfo=None)
 delta = now_naive - START_DATE_K70
@@ -168,21 +212,20 @@ curr_wd = py_to_bk.get(now.weekday(), '2')
 # --- MÀN HÌNH 1: LIST ---
 if st.session_state.view_mode == 'list':
     st.sidebar.header("🔍 Bộ Lọc")
-    # Fix ID Duplicate bằng key tĩnh
-    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3, key="slider_num_cols") 
+    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3, key="num_cols_slider")
     
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
-        if st.checkbox("Chỉnh tay", key="chk_manual_time"):
-            d_v = st.date_input("Ngày", st.session_state.current_time, key="date_picker")
-            t_v = st.time_input("Giờ", st.session_state.current_time.time(), key="time_picker")
+        if st.checkbox("Chỉnh tay", key="chk_manual"):
+            d_v = st.date_input("Ngày", st.session_state.current_time, key="date_in")
+            t_v = st.time_input("Giờ", st.session_state.current_time.time(), key="time_in")
             st.session_state.current_time = TZ_VN.localize(datetime.combine(d_v, t_v))
         else:
-            if st.button("Cập nhật giờ", key="btn_update_now"):
+            if st.button("Cập nhật giờ", key="btn_update"):
                 st.session_state.current_time = datetime.now(TZ_VN)
-                st.rerun()
+                st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
 
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
-    sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings, key="sb_building")
+    sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings, key="sel_build")
 
     st.markdown(f"""
     <div class="header-info">
@@ -214,6 +257,7 @@ if st.session_state.view_mode == 'list':
             if x['start_val'] <= c_hm <= x['end_val']:
                 l = x['end_val'] - c_hm
                 return "BUSY", f"ĐANG HỌC: {x['name']}<br>Đến: {x['end_str']} (Còn {l//60}h{l%60}p)", 3, x['code']
+        
         for x in slots:
             if x['start_val'] > c_hm:
                 diff = x['start_val'] - c_hm
@@ -221,6 +265,7 @@ if st.session_state.view_mode == 'list':
                 next_txt = f"Sau: {x['name']} ({x['start_str']})"
                 if diff >= 45: return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['code']
                 else: return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['code']
+        
         return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
 
     rooms = sorted(df_b['MY_ROOM'].unique())
@@ -247,9 +292,12 @@ if st.session_state.view_mode == 'list':
                     else: bg_cls, icon = "bg-busy", "⛔"
                     
                     code_text = item['code']
-                    if code_text == "NULL": code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
-                    elif code_text: code_html = f'<span class="code-badge">{code_text}</span>'
-                    else: code_html = ""
+                    if str(code_text) == "NULL": 
+                        code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
+                    elif code_text: 
+                        code_html = f'<span class="code-badge">{code_text}</span>'
+                    else: 
+                        code_html = ""
 
                     st.markdown(f"""
                     <div class="card-top {bg_cls}">
@@ -261,21 +309,19 @@ if st.session_state.view_mode == 'list':
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # FIX DUPLICATE ID: Thêm idx vào key
-                    btn_key = f"btn_{item['r']}_{idx}" 
-                    if st.button("📅 Xem chi tiết", key=btn_key):
+                    if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
-                        st.rerun()
+                        st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
 
 # --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
     with c1:
-        if st.button("⬅️ Quay lại", key="btn_back_detail"):
+        if st.button("⬅️ Quay lại", key="btn_back"):
             st.session_state.view_mode = 'list'
-            st.rerun()
+            st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
     with c2:
         st.markdown(f"## 📅 Lịch học: **{r_name}** (Tuần {curr_week})")
         
@@ -289,6 +335,7 @@ elif st.session_state.view_mode == 'detail':
     else:
         df_week['Day_Sort'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
         df_week = df_week.sort_values(by=['Day_Sort', 'Start'])
+        
         for _, row in df_week.iterrows():
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
