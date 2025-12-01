@@ -7,119 +7,122 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (FINAL V30 - DARK MODE & CLEAN BUTTON) ---
+# --- 2. CSS (GLASS UI - TỰ ĐỘNG THÍCH ỨNG DARK/LIGHT MODE) ---
 st.markdown("""
 <style>
-    /* 1. CARD CONTAINER */
+    /* 1. CARD CONTAINER (Thân thẻ) */
     .room-card-box {
-        /* Dùng màu nền phụ của Streamlit: Tự động xám nhẹ ở Light Mode, xám tối ở Dark Mode */
-        background-color: var(--secondary-background-color);
-        border-radius: 10px;
-        /* Viền mờ sử dụng rgba để hợp với mọi nền */
+        /* Dùng rgba để tạo hiệu ứng kính mờ, đẹp trên cả nền Sáng và Tối */
+        background-color: rgba(128, 128, 128, 0.1); 
+        color: inherit; /* Chữ tự động theo giao diện (Đen/Trắng) */
+        
+        border-radius: 12px;
+        /* Viền mờ tinh tế */
         border: 1px solid rgba(128, 128, 128, 0.2);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        margin-bottom: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        
+        margin-bottom: 15px; /* Khoảng cách giữa các thẻ */
         overflow: hidden;
-        transition: transform 0.2s, box-shadow 0.2s;
-        height: 100%;
         display: flex;
         flex-direction: column;
+        height: 100%;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
     
     .room-card-box:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        border-color: rgba(13, 110, 253, 0.5); /* Viền xanh khi hover */
+        transform: translateY(-3px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+        border-color: rgba(13, 110, 253, 0.5);
     }
 
-    /* 2. DẢI MÀU TRẠNG THÁI (Viền trái đậm hơn chút) */
-    .status-strip-free { border-left: 5px solid #28a745; }
-    .status-strip-soon { border-left: 5px solid #ffc107; }
-    .status-strip-busy { border-left: 5px solid #dc3545; }
+    /* 2. DẢI MÀU TRẠNG THÁI (Viền trái) */
+    .status-strip-free { border-left: 6px solid #28a745; }
+    .status-strip-soon { border-left: 6px solid #ffc107; }
+    .status-strip-busy { border-left: 6px solid #dc3545; }
 
-    /* 3. NỘI DUNG CARD */
+    /* 3. NỘI DUNG BÊN TRONG */
     .card-body {
-        padding: 16px;
+        padding: 16px 20px; /* Padding rộng rãi */
         flex-grow: 1;
     }
 
-    /* Header: Tên phòng */
+    /* Tên phòng */
     .room-name {
-        font-size: 1.3rem;
+        font-size: 1.4rem;
         font-weight: 800;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        /* Màu chữ tự động theo theme */
-        color: var(--text-color); 
+        color: var(--text-color); /* Tự động đổi màu */
     }
     
-    /* Badge trạng thái */
+    /* Badge trạng thái (Trong suốt nhẹ) */
     .status-badge {
-        font-size: 0.7rem;
-        padding: 3px 8px;
+        font-size: 0.75rem;
+        padding: 4px 10px;
         border-radius: 12px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    /* Dùng rgba để badge xuyên thấu nhẹ, đẹp trên cả nền tối */
-    .badge-free { background-color: rgba(40, 167, 69, 0.15); color: #28a745; }
-    .badge-soon { background-color: rgba(255, 193, 7, 0.15); color: #d39e00; }
-    .badge-busy { background-color: rgba(220, 53, 69, 0.15); color: #dc3545; }
+    .badge-free { background-color: rgba(40, 167, 69, 0.2); color: #28a745; }
+    .badge-soon { background-color: rgba(255, 193, 7, 0.2); color: #d39e00; }
+    .badge-busy { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
 
-    /* Thông tin chính */
+    /* Thông tin chi tiết */
     .info-primary {
         font-size: 1rem;
-        margin-bottom: 4px;
         font-weight: 600;
+        margin-bottom: 6px;
         color: var(--text-color);
         opacity: 0.95;
     }
     .info-secondary {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         color: var(--text-color);
-        opacity: 0.7; /* Làm mờ text phụ */
+        opacity: 0.7;
     }
 
-    /* 4. NÚT BẤM (CLEAN / GHOST STYLE) */
+    /* 4. NÚT BẤM (GHOST BUTTON - KHÔNG VIỀN) */
     div.stButton > button {
         width: 100%;
-        border: none !important; /* BỎ VIỀN HOÀN TOÀN */
-        background-color: transparent !important; /* NỀN TRONG SUỐT */
-        color: #0d6efd !important; /* Chữ màu xanh */
-        font-size: 0.9rem;
-        font-weight: 600;
-        padding: 10px 0;
-        margin: 0 !important;
-        border-top: 1px solid rgba(128, 128, 128, 0.1) !important; /* Gạch ngang mờ ngăn cách */
+        background-color: transparent !important; /* Nền trong suốt */
+        border: none !important; /* Bỏ viền hoàn toàn */
+        border-top: 1px solid rgba(128, 128, 128, 0.1) !important; /* Chỉ giữ 1 đường kẻ mờ ngăn cách */
         border-radius: 0 !important;
+        
+        color: #0d6efd !important; /* Chữ màu xanh */
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 12px 0; /* Tăng chiều cao nút */
+        margin: 0 !important;
         transition: all 0.2s;
     }
     div.stButton > button:hover {
-        background-color: rgba(13, 110, 253, 0.05) !important; /* Hover lên màu xanh rất nhạt */
+        background-color: rgba(13, 110, 253, 0.1) !important; /* Hover hiện nền xanh nhạt */
         color: #0a58ca !important;
-        letter-spacing: 0.5px; /* Hiệu ứng giãn chữ nhẹ khi hover */
+        letter-spacing: 0.5px;
     }
     
-    /* 5. CÁC THÀNH PHẦN KHÁC */
-    div[data-testid="column"] { padding: 0 8px; }
-    
+    /* 5. HEADER VÀ CÁC PHẦN KHÁC */
     .header-info {
-        background-color: var(--secondary-background-color);
-        padding: 15px; border-radius: 12px;
+        background-color: rgba(128, 128, 128, 0.1); /* Nền mờ */
+        padding: 20px; 
+        border-radius: 12px;
         margin-bottom: 25px; 
         border: 1px solid rgba(128, 128, 128, 0.1);
         text-align: center;
     }
-    
     .schedule-item {
-        background-color: var(--secondary-background-color);
+        background-color: rgba(128, 128, 128, 0.05);
         border-left: 4px solid #0d6efd;
-        padding: 12px; margin-bottom: 10px; border-radius: 6px;
+        padding: 15px; margin-bottom: 12px; border-radius: 8px;
         border: 1px solid rgba(128, 128, 128, 0.1);
     }
+    
+    /* Khoảng cách cột */
+    div[data-testid="column"] { padding: 0 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -350,13 +353,12 @@ if st.session_state.view_mode == 'list':
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Nút bấm Clean (Không viền, text xanh)
                     if st.button("Xem chi tiết ➜", key=f"btn_{item['r']}_{idx}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.rerun()
 
-# --- MÀN HÌNH CHI TIẾT ---
+# --- VIEW DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
