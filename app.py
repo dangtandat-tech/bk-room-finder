@@ -245,8 +245,14 @@ py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
 # --- MÀN HÌNH 1: LIST ---
+# --- MÀN HÌNH 1: DANH SÁCH ---
 if st.session_state.view_mode == 'list':
-    st.sidebar.header("🔍 Bộ Lọc")
+    st.sidebar.header("🔍 Bộ Lọc & Giao diện")
+    
+    # 1. Tùy chỉnh số cột (Thêm cái này để fix lỗi thẻ ngắn/bé)
+    num_cols = st.sidebar.slider("Số lượng cột hiển thị", min_value=1, max_value=5, value=3, help="Kéo giảm xuống nếu thấy thẻ bị bé quá")
+    
+    # 2. Bộ lọc thời gian
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay"):
             d_v = st.date_input("Ngày", st.session_state.current_time)
@@ -255,7 +261,7 @@ if st.session_state.view_mode == 'list':
         else:
             if st.button("Cập nhật giờ"):
                 st.session_state.current_time = datetime.now(TZ_VN)
-                st.rerun() # Dùng st.rerun() thay cho experimental_rerun()
+                st.rerun()
 
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
     sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings)
@@ -271,23 +277,52 @@ if st.session_state.view_mode == 'list':
     df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
     df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-    # Prepare Results
+    # Hàm lấy trạng thái (Giữ nguyên logic v15)
+    def get_status(schedule, c_time_full):
+        c_hm = c_time_full.hour * 60 + c_time_full.minute
+        slots = []
+        for _, row in schedule.iterrows():
+            try:
+                sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
+                eh, em = int(row['End'][:2]), int(row['End'][2:])
+                slots.append({'s': sh*60+sm, 'e': eh*60+em, 'n': row['MY_NAME'], 'c': row['MY_CODE'], 'es': f"{eh:02d}:{em:02d}", 'ss': f"{sh:02d}:{sm:02d}"})
+            except: continue
+        slots.sort(key=lambda x: x['s'])
+        
+        for x in slots:
+            if x['s'] <= c_hm <= x['e']:
+                l = x['e'] - c_hm
+                return "BUSY", f"ĐANG HỌC: {x['n']}<br>Đến: {x['es']} (Còn {l//60}h{l%60}p)", 3, x['c']
+        for x in slots:
+            if x['s'] > c_hm:
+                diff = x['s'] - c_hm
+                t_str = f"{diff//60}h{diff%60}p" if diff//60 > 0 else f"{diff%60}p"
+                next_txt = f"Sau: {x['n']} ({x['ss']})"
+                if diff >= 45: return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['c']
+                else: return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['c']
+        return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
+
     rooms = sorted(df_b['MY_ROOM'].unique())
     results = []
     for r in rooms:
         r_sch = df_active[df_active['MY_ROOM'] == r]
-        stt, msg, prio, code = get_room_status(r_sch, now)
+        stt, msg, prio, code = get_status(r_sch, now)
         results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
     
     results.sort(key=lambda x: (x['prio'], x['r']))
 
+    # RENDER GRID (Dùng biến num_cols)
     if not results:
         st.info("Không có dữ liệu.")
     else:
-        chunk_size = 4
+        # Dùng số cột người dùng chọn (num_cols) thay vì cố định số 4
+        chunk_size = num_cols 
         for i in range(0, len(results), chunk_size):
             cols = st.columns(chunk_size)
-            for idx, item in enumerate(results[i:i+chunk_size]):
+            # Xử lý trường hợp hàng cuối không đủ phần tử
+            row_items = results[i:i+chunk_size]
+            
+            for idx, item in enumerate(row_items):
                 with cols[idx]:
                     if item['st'] == 'FREE': bg_cls, icon = "bg-free", "✅"
                     elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
@@ -314,7 +349,7 @@ if st.session_state.view_mode == 'list':
                     if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
-                        st.rerun() # Dùng st.rerun()
+                        st.rerun()
 
 # --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
