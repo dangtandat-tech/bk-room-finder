@@ -1,52 +1,119 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import os
 
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS ---
+# --- 2. CSS (GIAO DIỆN CARD LIỀN KHỐI) ---
 st.markdown("""
 <style>
-    /* Card */
-    .room-card {
-        padding: 10px; border-radius: 8px; margin-bottom: 10px;
-        color: white; border: 1px solid rgba(255,255,255,0.1);
-        cursor: pointer; position: relative;
-    }
-    .status-free { background-color: #28a745; border-left: 4px solid #145523; }
-    .status-soon { background-color: #ffc107; color: #212529 !important; border-left: 4px solid #9c7500; }
-    .status-busy { background-color: #dc3545; border-left: 4px solid #881622; }
-    
-    .room-name { font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-    .room-status { font-size: 0.85rem; line-height: 1.3; margin-top: 4px;}
-    .class-code { 
-        font-size: 0.75rem; background: rgba(0,0,0,0.2); 
-        padding: 2px 6px; border-radius: 4px; margin-left: auto;
+    /* Card Top (Thông tin) */
+    .card-top {
+        padding: 12px 15px;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        color: white;
+        position: relative;
     }
     
-    /* Header */
+    /* Màu nền */
+    .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+    .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
+    .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
+
+    /* Typography */
+    .room-header { 
+        font-size: 1.3rem; font-weight: 800; 
+        display: flex; justify-content: space-between; align-items: center; 
+    }
+    .room-info { 
+        font-size: 0.9rem; margin-top: 6px; 
+        line-height: 1.4; opacity: 0.95; font-weight: 500;
+    }
+    
+    /* Badge Mã Lớp ("Cái ô lỗi") */
+    .code-badge { 
+        font-size: 0.75rem; 
+        background: rgba(255,255,255,0.25); 
+        padding: 3px 8px; 
+        border-radius: 6px; 
+        font-weight: bold; 
+        border: 1px solid rgba(255,255,255,0.4);
+        min-width: 60px;
+        text-align: center;
+    }
+
+    /* Nút bấm chìm bên dưới */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 0 0 12px 12px !important;
+        border: 1px solid #e0e0e0;
+        border-top: none;
+        background-color: #ffffff;
+        color: #666;
+        font-size: 0.85rem;
+        padding: 8px 0;
+        margin-top: -15px !important;
+        transition: all 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    div.stButton > button:hover {
+        background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
+    }
+    
+    /* Layout */
+    div[data-testid="column"] { padding: 0 6px; }
     .header-info {
-        background-color: #f8f9fa; padding: 10px; border-radius: 8px;
-        margin-bottom: 15px; border: 1px solid #dee2e6; text-align: center; color: #333;
+        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
-    
-    /* Expander lịch tuần */
-    .streamlit-expanderHeader { font-weight: bold; color: #0d6efd; }
-    .schedule-table { font-size: 0.85rem; width: 100%; border-collapse: collapse; }
-    .schedule-table th, .schedule-table td { border: 1px solid #ddd; padding: 4px; text-align: left; }
-    .schedule-table th { background-color: #f2f2f2; }
+    .schedule-item {
+        background: white; border-left: 5px solid #0d6efd;
+        padding: 15px; margin-bottom: 12px; border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 START_DATE_K70 = datetime(2025, 9, 8)
 TZ_VN = pytz.timezone('Asia/Ho_Chi_Minh')
 
-# --- 3. DATA PROCESSING ---
+# --- 3. HELPER FUNCTIONS ---
+def parse_weeks(w_str):
+    if pd.isna(w_str): return []
+    res = []
+    try:
+        parts = str(w_str).replace('"', '').split(',')
+        for p in parts:
+            if '-' in p:
+                s, e = map(int, p.split('-'))
+                res.extend(range(s, e + 1))
+            else:
+                res.append(int(p))
+    except: pass
+    return res
+
+def parse_time(t_str):
+    if pd.isna(t_str) or '-' not in str(t_str): return None, None
+    try:
+        s, e = str(t_str).split('-')
+        return s.strip().zfill(4), e.strip().zfill(4)
+    except: return None, None
+
+def check_week(w_str, current_week):
+    return str(current_week) in str(w_str).split(',')
+
+def clean_day(v):
+    try: return str(int(float(v)))
+    except: return str(v)
+
+# --- 4. LOAD DATA ---
 @st.cache(allow_output_mutation=True)
-def load_data():
+def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
     dfs = []
     encodings = ['utf-8-sig', 'utf-16', 'utf-8', 'cp1258', 'latin1']
@@ -65,7 +132,6 @@ def load_data():
     if not dfs: return pd.DataFrame()
     df_raw = pd.concat(dfs, ignore_index=True)
 
-    # Auto-detect cols
     cols = df_raw.columns.tolist()
     def fc(kws):
         for c in cols:
@@ -78,7 +144,7 @@ def load_data():
     c_day  = fc(['thứ', 'thu', 'day'])
     c_week = fc(['tuần', 'tuan'])
     c_name = fc(['tên_hp', 'ten_hp', 'name'])
-    c_code = fc(['mã_lớp', 'ma_lop', 'class_id']) # Thêm cột Mã lớp
+    c_code = fc(['mã_lớp', 'ma_lop', 'class_id'])
 
     if not c_room or not c_time: return pd.DataFrame()
 
@@ -88,67 +154,39 @@ def load_data():
     df['MY_DAY']  = df_raw[c_day] if c_day else "2"
     df['MY_WEEK'] = df_raw[c_week] if c_week else ""
     df['MY_NAME'] = df_raw[c_name] if c_name else "Lớp học"
-    df['MY_CODE'] = df_raw[c_code] if c_code else ""
+    df['MY_CODE'] = df_raw[c_code].fillna("") if c_code else "" # Fillna để tránh lỗi
 
     df = df.dropna(subset=['MY_ROOM', 'MY_TIME'])
     df = df[df['MY_ROOM'] != 'NULL']
 
-    # Parse Time
-    def parse_t(t):
-        if pd.isna(t) or '-' not in str(t): return None, None
-        try: s, e = str(t).split('-'); return s.strip().zfill(4), e.strip().zfill(4)
-        except: return None, None
-    
-    tp = df['MY_TIME'].apply(parse_t)
+    tp = df['MY_TIME'].apply(parse_time)
     df['Start'] = tp.apply(lambda x: x[0])
     df['End'] = tp.apply(lambda x: x[1])
     df = df.dropna(subset=['Start', 'End'])
 
-    # Parse Weeks
-    def parse_w(w):
-        if pd.isna(w): return []
-        res = []
-        try:
-            parts = str(w).replace('"', '').split(',')
-            for p in parts:
-                if '-' in p: s, e = map(int, p.split('-')); res.extend(range(s, e+1))
-                else: res.append(int(p))
-        except: pass
-        return res
     df['Parsed_Weeks'] = df['MY_WEEK'].apply(lambda x: ",".join(map(str, parse_weeks(x))))
 
-    # Building
-    df['Building'] = df['MY_ROOM'].apply(lambda x: str(x).split('-')[0] if '-' in str(x) else "Khác")
+    def extract_building(room_name):
+        s = str(room_name).strip()
+        if '-' in s: return s.split('-')[0]
+        return "Khác"
+    df['Building'] = df['MY_ROOM'].apply(extract_building)
+    
     return df
 
-# --- 4. APP LOGIC ---
+# --- 5. APP LOGIC ---
+if 'view_mode' not in st.session_state: st.session_state.view_mode = 'list'
+if 'selected_room_data' not in st.session_state: st.session_state.selected_room_data = None
+if 'current_time' not in st.session_state: st.session_state.current_time = datetime.now(TZ_VN)
+
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
-df = load_data()
+df = load_and_process()
 if df.empty:
-    st.error("Không có dữ liệu.")
+    st.error("Chưa có dữ liệu.")
     st.stop()
 
-# --- SIDEBAR & TIME CONTROL (Đã Fix lỗi nhảy giờ) ---
-# Logic: Chỉ update giờ khi bấm nút "Cập nhật" hoặc chưa có session_state
-if 'current_time' not in st.session_state:
-    st.session_state.current_time = datetime.now(TZ_VN)
-
-with st.sidebar.expander("🛠️ Chỉnh giờ (Test)"):
-    mode = st.radio("Chế độ:", ["Tự động (Realtime)", "Chỉnh tay"], index=0)
-    
-    if mode == "Chỉnh tay":
-        # Lấy giá trị cũ trong session state để hiển thị
-        d_val = st.date_input("Ngày", st.session_state.current_time)
-        t_val = st.time_input("Giờ", st.session_state.current_time.time())
-        # Cập nhật session state ngay khi user đổi input
-        new_dt = datetime.combine(d_val, t_val)
-        st.session_state.current_time = TZ_VN.localize(new_dt)
-    else:
-        # Chế độ tự động
-        if st.button("🔄 Cập nhật giờ hiện tại"):
-            st.session_state.current_time = datetime.now(TZ_VN)
-
+# Time Logic
 now = st.session_state.current_time
 now_naive = now.replace(tzinfo=None)
 delta = now_naive - START_DATE_K70
@@ -156,147 +194,163 @@ curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
-st.markdown(f"""
-<div class="header-info">
-    <div style="font-size: 1.1rem; font-weight: bold; color: #d63384;">
-        {now.strftime('%H:%M')} | Thứ {curr_wd} | Ngày {now.strftime('%d/%m/%Y')}
+# --- MÀN HÌNH 1: DANH SÁCH ---
+if st.session_state.view_mode == 'list':
+    # Sidebar
+    st.sidebar.header("🔍 Bộ Lọc")
+    with st.sidebar.expander("🛠️ Chỉnh giờ"):
+        if st.checkbox("Chỉnh tay"):
+            d_v = st.date_input("Ngày", st.session_state.current_time)
+            t_v = st.time_input("Giờ", st.session_state.current_time.time())
+            st.session_state.current_time = TZ_VN.localize(datetime.combine(d_v, t_v))
+        else:
+            if st.button("Cập nhật giờ"):
+                st.session_state.current_time = datetime.now(TZ_VN)
+                st.experimental_rerun()
+
+    buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
+    sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings)
+
+    st.markdown(f"""
+    <div class="header-info">
+        <h3 style="margin:0; color:#d63384">{now.strftime('%H:%M')} | Thứ {curr_wd} | {now.strftime('%d/%m/%Y')}</h3>
+        <p style="margin:0">Tuần học: <b>{curr_week}</b></p>
     </div>
-    <div style="font-size: 0.9rem; color: #666;">Tuần học: <b>{curr_week}</b></div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# Filter
-buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
-sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings)
+    # Filter
+    df_b = df[df['Building'] == sel_b]
+    df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
+    df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-df_b = df[df['Building'] == sel_b]
-
-# Helper functions
-def clean_day(v):
-    try: return str(int(float(v)))
-    except: return str(v)
-
-def check_week(w, cw): return str(cw) in str(w).split(',')
-
-# Lọc data hôm nay
-df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
-df_today_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
-
-# --- CHECK STATUS (Logic hiển thị mã lớp) ---
-def get_status(schedule, c_time_full):
-    c_hm = c_time_full.hour * 60 + c_time_full.minute
-    slots = []
-    
-    for _, row in schedule.iterrows():
-        try:
-            sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
-            eh, em = int(row['End'][:2]), int(row['End'][2:])
-            s_val = sh * 60 + sm
-            e_val = eh * 60 + em
-            slots.append({
-                's': s_val, 'e': e_val, 
-                'name': row['MY_NAME'], 
-                'code': row['MY_CODE'],
-                's_str': f"{sh:02d}:{sm:02d}", 
-                'e_str': f"{eh:02d}:{em:02d}"
-            })
-        except: continue
-    
-    slots.sort(key=lambda x: x['s'])
-    
-    # 1. Busy
-    for x in slots:
-        if x['s'] <= c_hm <= x['e']:
-            l = x['e'] - c_hm
-            h, m = l // 60, l % 60
-            return "BUSY", f"Đang học: {x['name']}<br>Đến: {x['e_str']} (Còn {h}h {m}p)", 3, x['code']
-            
-    # 2. Soon
-    for x in slots:
-        if x['s'] > c_hm:
-            diff = x['s'] - c_hm
-            h, m = diff // 60, diff % 60
-            t_str = f"{h}h {m}p" if h > 0 else f"{m}p"
-            next_msg = f"Tiết sau: {x['name']}<br>Bắt đầu: <b>{x['s_str']}</b>"
-            
-            if diff >= 45: 
-                return "FREE", f"TRỐNG: {t_str}<br>{next_msg}", 1, x['code']
-            else: 
-                return "SOON", f"Sắp học trong {t_str}<br>{next_msg}", 2, x['code']
-                
-    return "FREE", "TRỐNG đến hết ngày hôm nay", 0, ""
-
-# --- HIỂN THỊ ---
-rooms = sorted(df_b['MY_ROOM'].unique())
-results = []
-
-for r in rooms:
-    r_sch = df_today_active[df_today_active['MY_ROOM'] == r]
-    stt, msg, prio, code = get_status(r_sch, now)
-    results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
-
-results.sort(key=lambda x: (x['prio'], x['r']))
-
-# --- GRID LAYOUT ---
-if not results:
-    st.info(f"Không có dữ liệu cho tòa {sel_b}.")
-else:
-    # Render từng row (4 cols)
-    chunk_size = 4
-    for i in range(0, len(results), chunk_size):
-        row_items = results[i:i+chunk_size]
-        cols = st.columns(chunk_size)
+    # --- LOGIC STATUS (ĐÃ SỬA THEO YÊU CẦU) ---
+    def get_status(schedule, c_time_full):
+        c_hm = c_time_full.hour * 60 + c_time_full.minute
+        slots = []
+        for _, row in schedule.iterrows():
+            try:
+                sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
+                eh, em = int(row['End'][:2]), int(row['End'][2:])
+                s_val = sh * 60 + sm
+                e_val = eh * 60 + em
+                # Lưu cả Mã lớp (code) vào slots
+                slots.append({
+                    'start_val': s_val, 'end_val': e_val, 
+                    'name': row['MY_NAME'], 'code': row['MY_CODE'], 
+                    'end_str': f"{eh:02d}:{em:02d}", 'start_str': f"{sh:02d}:{sm:02d}"
+                })
+            except: continue
         
-        for idx, item in enumerate(row_items):
-            # CSS Class
-            if item['st'] == 'FREE': cls, icon = "status-free", "✅"
-            elif item['st'] == 'SOON': cls, icon = "status-soon", "⚠️"
-            else: cls, icon = "status-busy", "⛔"
-            
-            # HTML Card
-            # Nếu có mã lớp (code) thì hiện, không thì ẩn
-            code_html = f'<span class="class-code">{item["code"]}</span>' if item["code"] and item["st"] != "FREE" else ""
-            
-            # Logic hiển thị mã lớp ở Card Xanh (Tiết tiếp theo)
-            # Ở phần get_status đã trả về mã lớp của tiết tiếp theo rồi -> item['code'] có giá trị
-            if item['st'] == 'FREE' and item['code']:
-                code_html = f'<span class="class-code">Next: {item["code"]}</span>'
-
-            card_html = f"""
-            <div class="room-card {cls}">
-                <div class="room-name">
-                    <span>{icon} {item['r']}</span>
-                    {code_html}
-                </div>
-                <div class="room-status">{item['msg']}</div>
-            </div>
-            """
-            
-            with cols[idx]:
-                st.markdown(card_html, unsafe_allow_html=True)
+        slots.sort(key=lambda x: x['start_val'])
+        
+        # 1. Check Đang học -> Trả về Mã lớp Đang học
+        for x in slots:
+            if x['start_val'] <= c_hm <= x['end_val']:
+                l = x['end_val'] - c_hm
+                h, m = l // 60, l % 60
+                return "BUSY", f"ĐANG HỌC: {x['name']}<br>Đến: {x['end_str']} (Còn {h}h {m}p)", 3, x['code']
+        
+        # 2. Check Sắp học -> Trả về Mã lớp Tiếp theo
+        for x in slots:
+            if x['start_val'] > c_hm:
+                diff = x['start_val'] - c_hm
+                h, m = diff // 60, diff % 60
+                t_str = f"{h}h {m}p" if h > 0 else f"{m}p"
+                next_txt = f"Sau: {x['name']} ({x['start_str']})"
                 
-                # --- TÍNH NĂNG XEM LỊCH TUẦN ---
-                with st.expander("📅 Xem lịch tuần"):
-                    # Lấy toàn bộ lịch của phòng này trong tuần hiện tại
-                    # Lọc theo Tuần hiện tại + Phòng này (Không lọc Thứ)
-                    df_week = df_b[
-                        (df_b['MY_ROOM'] == item['r']) & 
-                        (df_b['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week)))
-                    ].copy()
+                if diff >= 45: 
+                    return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['code'] # Mã tiết sau
+                else: 
+                    return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['code'] # Mã tiết sau
+        
+        # 3. Hết tiết -> Trả về NULL
+        return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
+
+    # Prepare Results
+    rooms = sorted(df_b['MY_ROOM'].unique())
+    results = []
+    for r in rooms:
+        r_sch = df_active[df_active['MY_ROOM'] == r]
+        # Lấy đủ 4 biến trả về
+        stt, msg, prio, code = get_status(r_sch, now)
+        results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
+    
+    results.sort(key=lambda x: (x['prio'], x['r']))
+
+    # RENDER GRID
+    if not results:
+        st.info("Không có dữ liệu.")
+    else:
+        chunk_size = 4
+        for i in range(0, len(results), chunk_size):
+            cols = st.columns(chunk_size)
+            for idx, item in enumerate(results[i:i+chunk_size]):
+                with cols[idx]:
+                    # Determine Style
+                    if item['st'] == 'FREE': 
+                        bg_cls, icon = "bg-free", "✅"
+                    elif item['st'] == 'SOON': 
+                        bg_cls, icon = "bg-soon", "⚠️"
+                    else: 
+                        bg_cls, icon = "bg-busy", "⛔"
                     
-                    if df_week.empty:
-                        st.caption("Tuần này không có lịch học.")
+                    # Logic Hiển thị Badge Code
+                    code_text = item['code']
+                    if code_text == "NULL":
+                        # Nếu hết tiết -> Ghi NULL (hoặc ẩn nếu muốn)
+                        code_html = f'<span class="code-badge" style="background:rgba(0,0,0,0.1); border:none">NULL</span>'
+                    elif code_text:
+                        # Nếu có mã -> Hiển thị
+                        code_html = f'<span class="code-badge">{code_text}</span>'
                     else:
-                        # Sắp xếp theo Thứ -> Giờ bắt đầu
-                        df_week['Day_Int'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
-                        df_week = df_week.sort_values(by=['Day_Int', 'Start'])
-                        
-                        # Hiển thị bảng mini
-                        for _, row in df_week.iterrows():
-                            d = str(int(float(row['MY_DAY'])))
-                            st.markdown(f"""
-                            <div style="font-size: 0.85rem; border-bottom:1px solid #eee; padding: 4px 0;">
-                                <b>Thứ {d}</b> | {row['Start'][:2]}:{row['Start'][2:]}-{row['End'][:2]}:{row['End'][2:]}<br>
-                                {row['MY_NAME']} <i style="color:#888">({row['MY_CODE']})</i>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        code_html = ""
+
+                    # Card HTML
+                    st.markdown(f"""
+                    <div class="card-top {bg_cls}">
+                        <div class="room-header">
+                            <span>{icon} {item['r']}</span>
+                            {code_html}
+                        </div>
+                        <div class="room-info">{item['msg']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Button Streamlit
+                    if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
+                        st.session_state.selected_room_data = item['r']
+                        st.session_state.view_mode = 'detail'
+                        st.experimental_rerun()
+
+# --- MÀN HÌNH 2: CHI TIẾT ---
+elif st.session_state.view_mode == 'detail':
+    r_name = st.session_state.selected_room_data
+    
+    c1, c2 = st.columns([1, 6])
+    with c1:
+        if st.button("⬅️ Quay lại"):
+            st.session_state.view_mode = 'list'
+            st.experimental_rerun()
+    with c2:
+        st.markdown(f"## 📅 Lịch học: **{r_name}** (Tuần {curr_week})")
+        
+    df_week = df[
+        (df['MY_ROOM'] == r_name) & 
+        (df['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week)))
+    ].copy()
+    
+    if df_week.empty:
+        st.info("Tuần này phòng trống hoàn toàn.")
+    else:
+        df_week['Day_Sort'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
+        df_week = df_week.sort_values(by=['Day_Sort', 'Start'])
+        
+        for _, row in df_week.iterrows():
+            d = str(int(float(row['MY_DAY'])))
+            st.markdown(f"""
+            <div class="schedule-item">
+                <div style="font-weight:bold; font-size:1.1rem">Thứ {d} | {row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
+                <div style="color:#d63384; font-weight:600">{row['MY_NAME']}</div>
+                <div style="font-size:0.9rem; color:#666">Mã lớp: {row['MY_CODE']}</div>
+            </div>
+            """, unsafe_allow_html=True)
