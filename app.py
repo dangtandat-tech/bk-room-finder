@@ -7,10 +7,10 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (GIAO DIỆN DASHBOARD CHUYÊN NGHIỆP) ---
+# --- 2. CSS (ĐÃ CĂN CHỈNH LỀ CHUẨN) ---
 st.markdown("""
 <style>
-    /* Tổng thể Card */
+    /* Card Container */
     .room-card-box {
         background-color: white;
         border-radius: 8px;
@@ -29,18 +29,18 @@ st.markdown("""
         border-color: #d1d5db;
     }
 
-    /* Dải màu trạng thái bên trái */
-    .status-strip-free { border-left: 5px solid #10b981; } /* Xanh ngọc */
-    .status-strip-soon { border-left: 5px solid #f59e0b; } /* Cam vàng */
-    .status-strip-busy { border-left: 5px solid #ef4444; } /* Đỏ */
+    /* Dải màu trạng thái */
+    .status-strip-free { border-left: 5px solid #10b981; }
+    .status-strip-soon { border-left: 5px solid #f59e0b; }
+    .status-strip-busy { border-left: 5px solid #ef4444; }
 
-    /* Nội dung bên trong */
+    /* Nội dung Card */
     .card-body {
         padding: 12px 15px;
         flex-grow: 1;
     }
 
-    /* Header: Tên phòng + Icon */
+    /* Header */
     .card-header {
         display: flex;
         justify-content: space-between;
@@ -54,7 +54,7 @@ st.markdown("""
         margin: 0;
     }
     
-    /* Badge trạng thái nhỏ góc phải */
+    /* Badge trạng thái */
     .status-badge {
         font-size: 0.7rem;
         padding: 2px 8px;
@@ -75,7 +75,7 @@ st.markdown("""
     }
     .highlight-time { font-weight: 600; color: #111827; }
     
-    /* Thông tin phụ (Mã lớp, Tiết sau) */
+    /* Thông tin phụ */
     .sub-text {
         font-size: 0.8rem;
         color: #6b7280;
@@ -85,14 +85,14 @@ st.markdown("""
         gap: 5px;
     }
 
-    /* Custom Button của Streamlit: Biến thành thanh footer */
+    /* Nút bấm (Footer) */
     div.stButton > button {
         width: 100%;
         border-radius: 0;
         border: none;
         border-top: 1px solid #f3f4f6;
         background-color: #f9fafb;
-        color: #2563eb; /* Màu xanh link */
+        color: #2563eb;
         font-size: 0.85rem;
         font-weight: 500;
         padding: 8px 0;
@@ -104,12 +104,19 @@ st.markdown("""
         color: #1d4ed8;
     }
 
-    /* Layout Header trang web */
+    /* Page Header */
     .page-header {
         background: white; padding: 15px 20px; 
         border-radius: 10px; border: 1px solid #e5e7eb;
         display: flex; justify-content: space-between; align-items: center;
         margin-bottom: 20px;
+    }
+    
+    /* Schedule Detail Item */
+    .schedule-item {
+        background: white; border-left: 4px solid #2563eb; 
+        padding: 15px; margin-bottom: 10px; border-radius: 8px; 
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -146,7 +153,7 @@ def clean_day(v):
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- 4. LOAD DATA (CACHE_DATA) ---
+# --- 4. LOAD DATA ---
 @st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
@@ -156,9 +163,14 @@ def load_and_process():
     
     for f in files:
         if not os.path.exists(f):
+            found = False
             for sf in server_files:
-                if sf.lower() == f.lower(): f = sf; break
-            else: continue
+                if sf.lower() == f.lower():
+                    f = sf
+                    found = True
+                    break
+            if not found: continue
+            
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -237,7 +249,6 @@ curr_wd = py_to_bk.get(now.weekday(), '2')
 
 # --- MÀN HÌNH DANH SÁCH ---
 if st.session_state.view_mode == 'list':
-    # Thanh Header thông tin
     st.markdown(f"""
     <div class="page-header">
         <div>
@@ -251,9 +262,8 @@ if st.session_state.view_mode == 'list':
     </div>
     """, unsafe_allow_html=True)
 
-    # Sidebar
     st.sidebar.header("🔍 Bộ Lọc")
-    num_cols = st.sidebar.slider("Số cột", 1, 4, 3, key="num_cols_slider")
+    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3, key="num_cols_slider")
     
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay", key="chk_manual"):
@@ -272,7 +282,6 @@ if st.session_state.view_mode == 'list':
     df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
     df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-    # Logic Status
     def get_room_status(schedule, c_time_full):
         c_hm = c_time_full.hour * 60 + c_time_full.minute
         slots = []
@@ -288,21 +297,16 @@ if st.session_state.view_mode == 'list':
             except: continue
         slots.sort(key=lambda x: x['start_val'])
         
-        # 1. Busy
         for x in slots:
             if x['start_val'] <= c_hm <= x['end_val']:
                 l = x['end_val'] - c_hm
-                return "BUSY", f"Đang học: {x['name']}", f"Đến {x['end_str']} ({l//60}h{l%60}p)", x['code']
-        # 2. Soon
+                return "BUSY", f"Đang học: {x['name']}", f"Đến {x['end_str']} (Còn {l//60}h{l%60}p)", x['code']
         for x in slots:
             if x['start_val'] > c_hm:
                 diff = x['start_val'] - c_hm
                 t_str = f"{diff//60}h{diff%60}p" if diff//60 > 0 else f"{diff%60}p"
-                
-                if diff >= 45: 
-                    return "FREE", f"Trống trong {t_str}", f"Sau: {x['name']} ({x['start_str']})", x['code']
-                else: 
-                    return "SOON", f"Sắp học trong {t_str}", f"Sau: {x['name']} ({x['start_str']})", x['code']
+                if diff >= 45: return "FREE", f"Trống trong {t_str}", f"Sau: {x['name']} ({x['start_str']})", x['code']
+                else: return "SOON", f"Sắp học trong {t_str}", f"Sau: {x['name']} ({x['start_str']})", x['code']
         
         return "FREE", "Trống đến hết ngày", "Thoải mái tự học", "NULL"
 
@@ -310,13 +314,11 @@ if st.session_state.view_mode == 'list':
     results = []
     for r in rooms:
         r_sch = df_active[df_active['MY_ROOM'] == r]
-        # Hàm trả về 4 biến: Status, Main Msg, Sub Msg, Code
         stt, msg1, msg2, code = get_room_status(r_sch, now)
         results.append({"r": r, "m1": msg1, "m2": msg2, "st": stt, "prio": {"FREE": 1, "SOON": 2, "BUSY": 3}[stt], "code": code})
     
     results.sort(key=lambda x: (x['prio'], x['r']))
 
-    # RENDER GRID
     if not results:
         st.info("Không có dữ liệu.")
     else:
@@ -324,22 +326,16 @@ if st.session_state.view_mode == 'list':
         for i in range(0, len(results), chunk_size):
             cols = st.columns(chunk_size)
             row_items = results[i:i+chunk_size]
-            
             for idx, item in enumerate(row_items):
                 with cols[idx]:
-                    # Config Style
-                    if item['st'] == 'FREE': 
-                        css_class, badge_cls, badge_txt = "status-strip-free", "badge-free", "TRỐNG"
-                    elif item['st'] == 'SOON': 
-                        css_class, badge_cls, badge_txt = "status-strip-soon", "badge-soon", "SẮP HỌC"
-                    else: 
-                        css_class, badge_cls, badge_txt = "status-strip-busy", "badge-busy", "ĐANG HỌC"
+                    if item['st'] == 'FREE': css_cls, badge_cls, badge_txt = "status-strip-free", "badge-free", "TRỐNG"
+                    elif item['st'] == 'SOON': css_cls, badge_cls, badge_txt = "status-strip-soon", "badge-soon", "SẮP HỌC"
+                    else: css_cls, badge_cls, badge_txt = "status-strip-busy", "badge-busy", "ĐANG HỌC"
                     
                     code_info = f"Mã: {item['code']}" if item['code'] and item['code'] != "NULL" else ""
 
-                    # Render HTML Card
                     st.markdown(f"""
-                    <div class="room-card-box {css_class}">
+                    <div class="room-card-box {css_cls}">
                         <div class="card-body">
                             <div class="card-header">
                                 <h3 class="room-name">{item['r']}</h3>
@@ -347,14 +343,11 @@ if st.session_state.view_mode == 'list':
                             </div>
                             <div class="info-text highlight-time">{item['m1']}</div>
                             <div class="info-text">{item['m2']}</div>
-                            <div class="sub-text">
-                                <span>📌 {code_info}</span>
-                            </div>
+                            <div class="sub-text"><span>📌 {code_info}</span></div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Nút bấm tàng hình (Footer)
                     if st.button("Xem lịch chi tiết ➜", key=f"btn_{item['r']}_{idx}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
@@ -386,14 +379,16 @@ elif st.session_state.view_mode == 'detail':
         for _, row in df_week.iterrows():
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
-            <div style="background:white; border-left:4px solid #2563eb; padding:15px; margin-bottom:10px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05); display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:700; font-size:1.1rem; color:#1f2937">Thứ {d}</div>
-                    <div style="color:#4b5563; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
-                </div>
-                <div style="text-align:right">
-                    <div style="color:#d97706; font-weight:600">{row['MY_NAME']}</div>
-                    <div style="font-size:0.8rem; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px">{row['MY_CODE']}</div>
+            <div class="schedule-item">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:700; font-size:1.1rem; color:#1f2937">Thứ {d}</div>
+                        <div style="color:#4b5563; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="color:#d97706; font-weight:600">{row['MY_NAME']}</div>
+                        <div style="font-size:0.8rem; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px">{row['MY_CODE']}</div>
+                    </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
