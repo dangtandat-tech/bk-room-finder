@@ -7,69 +7,67 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (GIỮ NGUYÊN GIAO DIỆN ĐẸP) ---
+# --- 2. CSS (RESET VỀ GIAO DIỆN CHUẨN ĐẸP) ---
 st.markdown("""
 <style>
-    /* Card Top */
-    .card-top {
-        padding: 12px 15px;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        color: white;
-        position: relative;
+    /* Card Container */
+    .room-card-wrapper {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
+        background: white;
+        border: 1px solid #e0e0e0;
     }
-    /* Màu nền */
+
+    /* Phần trên: Thông tin chính (Màu sắc) */
+    .card-header {
+        padding: 12px 15px;
+        color: white;
+    }
     .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
     .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
     .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
 
-    /* Typography */
-    .room-header { 
-        font-size: 1.3rem; font-weight: 800; 
-        display: flex; justify-content: space-between; align-items: center; 
+    .room-title {
+        font-size: 1.25rem; font-weight: 800;
+        display: flex; justify-content: space-between; align-items: center;
     }
-    .room-info { 
-        font-size: 0.9rem; margin-top: 6px; 
-        line-height: 1.4; opacity: 0.95; font-weight: 500;
-    }
+    .room-sub { font-size: 0.9rem; margin-top: 5px; opacity: 0.95; line-height: 1.4; font-weight: 500; }
     
     /* Badge Mã Lớp */
-    .code-badge { 
-        font-size: 0.75rem; 
-        background: rgba(255,255,255,0.25); 
-        padding: 3px 8px; 
-        border-radius: 6px; 
-        font-weight: bold; 
+    .code-badge {
+        font-size: 0.75rem; background: rgba(255,255,255,0.3);
+        padding: 3px 8px; border-radius: 4px; font-weight: bold;
     }
 
-    /* Nút bấm chìm */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 0 0 12px 12px !important;
-        border: 1px solid #e0e0e0;
-        border-top: none;
-        background-color: #ffffff;
-        color: #666;
-        font-size: 0.85rem;
-        padding: 8px 0;
-        margin-top: -15px !important;
-        transition: all 0.2s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    div.stButton > button:hover {
-        background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
+    /* Phần dưới: Nút bấm (Tách riêng để không lỗi layout) */
+    .card-footer {
+        padding: 0; /* Để nút bấm tràn viền */
+        background: #f8f9fa;
     }
     
-    div[data-testid="column"] { padding: 0 6px; }
-    .schedule-item {
-        background: white; border-left: 5px solid #0d6efd;
-        padding: 15px; margin-bottom: 12px; border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
+    /* Chỉnh nút bấm Streamlit cho khớp vào Footer */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 0 0 10px 10px; /* Bo góc dưới */
+        border: none;
+        border-top: 1px solid #eee;
+        background-color: transparent;
+        color: #0d6efd;
+        font-weight: 600;
+        padding: 8px 0;
+        transition: all 0.2s;
     }
+    div.stButton > button:hover {
+        background-color: #e9ecef;
+        color: #0056b3;
+    }
+
+    /* Layout */
     .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
+        background-color: #f8f9fa; padding: 15px; border-radius: 10px;
+        margin-bottom: 20px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,10 +85,16 @@ def parse_weeks(w_str):
             if '-' in p:
                 s, e = map(int, p.split('-'))
                 res.extend(range(s, e + 1))
-            else:
-                res.append(int(p))
+            else: res.append(int(p))
     except: pass
     return res
+
+def parse_time(t_str):
+    if pd.isna(t_str) or '-' not in str(t_str): return None, None
+    try:
+        s, e = str(t_str).split('-')
+        return s.strip().zfill(4), e.strip().zfill(4)
+    except: return None, None
 
 def parse_time(t_str):
     if pd.isna(t_str) or '-' not in str(t_str): return None, None
@@ -106,65 +110,19 @@ def clean_day(v):
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- HÀM LOGIC TRẠNG THÁI ---
-def get_room_status(schedule, c_time_full):
-    c_hm = c_time_full.hour * 60 + c_time_full.minute
-    slots = []
-    for _, row in schedule.iterrows():
-        try:
-            sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
-            eh, em = int(row['End'][:2]), int(row['End'][2:])
-            s_val = sh * 60 + sm
-            e_val = eh * 60 + em
-            slots.append({
-                'start_val': s_val, 'end_val': e_val, 
-                'name': row['MY_NAME'], 'code': row['MY_CODE'], 
-                'end_str': f"{eh:02d}:{em:02d}", 'start_str': f"{sh:02d}:{sm:02d}"
-            })
-        except: continue
-    
-    slots.sort(key=lambda x: x['start_val'])
-    
-    # 1. Đang học (ĐỎ)
-    for x in slots:
-        if x['start_val'] <= c_hm <= x['end_val']:
-            l = x['end_val'] - c_hm
-            h, m = l // 60, l % 60
-            return "BUSY", f"ĐANG HỌC: {x['name']}<br>Đến: {x['end_str']} (Còn {h}h {m}p)", 3, x['code']
-    
-    # 2. Sắp học (XANH/VÀNG)
-    for x in slots:
-        if x['start_val'] > c_hm:
-            diff = x['start_val'] - c_hm
-            h, m = diff // 60, diff % 60
-            t_str = f"{h}h {m}p" if h > 0 else f"{m}p"
-            next_txt = f"Sau: {x['name']} ({x['start_str']})"
-            
-            if diff >= 45: 
-                return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['code']
-            else: 
-                return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['code']
-    
-    # 3. Hết tiết (XANH)
-    return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
-
-# --- 4. LOAD DATA (Cập nhật Cache mới) ---
+# --- 4. LOAD DATA ---
 @st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
     dfs = []
     encodings = ['utf-8-sig', 'utf-16', 'utf-8', 'cp1258', 'latin1']
-    
     server_files = os.listdir()
     
     for f in files:
         if not os.path.exists(f):
             for sf in server_files:
-                if sf.lower() == f.lower():
-                    f = sf
-                    break
+                if sf.lower() == f.lower(): f = sf; break
             else: continue
-            
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -216,7 +174,6 @@ def load_and_process():
         if '-' in s: return s.split('-')[0]
         return "Khác"
     df['Building'] = df['MY_ROOM'].apply(extract_building)
-    
     return df
 
 # --- 5. APP LOGIC ---
@@ -226,17 +183,11 @@ if 'current_time' not in st.session_state: st.session_state.current_time = datet
 
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
-try:
-    df = load_and_process()
-except Exception as e:
-    st.error(f"Lỗi data: {e}")
-    st.stop()
+try: df = load_and_process()
+except: st.stop()
 
-if df.empty:
-    st.warning("Chưa tải được dữ liệu. Vui lòng kiểm tra file trên GitHub.")
-    st.stop()
+if df.empty: st.stop()
 
-# Time
 now = st.session_state.current_time
 now_naive = now.replace(tzinfo=None)
 delta = now_naive - START_DATE_K70
@@ -244,15 +195,12 @@ curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
-# --- MÀN HÌNH 1: LIST ---
-# --- MÀN HÌNH 1: DANH SÁCH ---
+# --- VIEW: LIST ---
 if st.session_state.view_mode == 'list':
-    st.sidebar.header("🔍 Bộ Lọc & Giao diện")
+    st.sidebar.header("🔍 Bộ Lọc")
+    # Thanh trượt số cột (Quan trọng để fix lỗi hiển thị)
+    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3) 
     
-    # 1. Tùy chỉnh số cột (Thêm cái này để fix lỗi thẻ ngắn/bé)
-    num_cols = st.sidebar.slider("Số lượng cột hiển thị", min_value=1, max_value=5, value=3, help="Kéo giảm xuống nếu thấy thẻ bị bé quá")
-    
-    # 2. Bộ lọc thời gian
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay"):
             d_v = st.date_input("Ngày", st.session_state.current_time)
@@ -277,7 +225,6 @@ if st.session_state.view_mode == 'list':
     df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
     df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-    # Hàm lấy trạng thái (Giữ nguyên logic v15)
     def get_status(schedule, c_time_full):
         c_hm = c_time_full.hour * 60 + c_time_full.minute
         slots = []
@@ -311,54 +258,48 @@ if st.session_state.view_mode == 'list':
     
     results.sort(key=lambda x: (x['prio'], x['r']))
 
-    # RENDER GRID (Dùng biến num_cols)
     if not results:
         st.info("Không có dữ liệu.")
     else:
-        # Dùng số cột người dùng chọn (num_cols) thay vì cố định số 4
-        chunk_size = num_cols 
+        # GRID RENDER
+        chunk_size = num_cols
         for i in range(0, len(results), chunk_size):
             cols = st.columns(chunk_size)
-            # Xử lý trường hợp hàng cuối không đủ phần tử
-            row_items = results[i:i+chunk_size]
-            
-            for idx, item in enumerate(row_items):
+            for idx, item in enumerate(results[i:i+chunk_size]):
                 with cols[idx]:
                     if item['st'] == 'FREE': bg_cls, icon = "bg-free", "✅"
                     elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
                     else: bg_cls, icon = "bg-busy", "⛔"
                     
-                    code_text = item['code']
-                    if code_text == "NULL": 
-                        code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
-                    elif code_text: 
-                        code_html = f'<span class="code-badge">{code_text}</span>'
-                    else: 
-                        code_html = ""
+                    code_html = f'<span class="code-badge">{item["code"]}</span>' if item['code'] and item['code'] != "NULL" else ""
 
+                    # Wrapper
                     st.markdown(f"""
-                    <div class="card-top {bg_cls}">
-                        <div class="room-header">
-                            <span>{icon} {item['r']}</span>
-                            {code_html}
+                    <div class="room-card-wrapper">
+                        <div class="card-header {bg_cls}">
+                            <div class="room-title">
+                                <span>{icon} {item['r']}</span>
+                                {code_html}
+                            </div>
+                            <div class="room-sub">{item['msg']}</div>
                         </div>
-                        <div class="room-info">{item['msg']}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
+                    # Nút bấm riêng biệt (Không bị lỗi CSS)
                     if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.rerun()
 
-# --- MÀN HÌNH 2: DETAIL ---
+# --- VIEW: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
     with c1:
         if st.button("⬅️ Quay lại"):
             st.session_state.view_mode = 'list'
-            st.rerun() # Dùng st.rerun()
+            st.rerun()
     with c2:
         st.markdown(f"## 📅 Lịch học: **{r_name}** (Tuần {curr_week})")
         
@@ -372,11 +313,10 @@ elif st.session_state.view_mode == 'detail':
     else:
         df_week['Day_Sort'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
         df_week = df_week.sort_values(by=['Day_Sort', 'Start'])
-        
         for _, row in df_week.iterrows():
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
-            <div class="schedule-item">
+            <div style="background:white; border-left:5px solid #0d6efd; padding:15px; margin-bottom:10px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); color:#333;">
                 <div style="font-weight:bold; font-size:1.1rem">Thứ {d} | {row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
                 <div style="color:#d63384; font-weight:600">{row['MY_NAME']}</div>
                 <div style="font-size:0.9rem; color:#666">Mã lớp: {row['MY_CODE']}</div>
