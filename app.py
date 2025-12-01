@@ -7,67 +7,39 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (RESET VỀ GIAO DIỆN CHUẨN ĐẸP) ---
+# --- 2. CSS (GIỮ NGUYÊN GIAO DIỆN ĐẸP) ---
 st.markdown("""
 <style>
-    /* Card Container */
-    .room-card-wrapper {
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-        background: white;
-        border: 1px solid #e0e0e0;
-    }
-
-    /* Phần trên: Thông tin chính (Màu sắc) */
-    .card-header {
-        padding: 12px 15px;
-        color: white;
+    .card-top {
+        padding: 12px 15px; border-top-left-radius: 12px; border-top-right-radius: 12px;
+        color: white; position: relative;
     }
     .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
     .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
     .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
-
-    .room-title {
-        font-size: 1.25rem; font-weight: 800;
-        display: flex; justify-content: space-between; align-items: center;
-    }
-    .room-sub { font-size: 0.9rem; margin-top: 5px; opacity: 0.95; line-height: 1.4; font-weight: 500; }
+    .room-header { font-size: 1.3rem; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
+    .room-info { font-size: 0.9rem; margin-top: 6px; line-height: 1.4; opacity: 0.95; font-weight: 500; }
+    .code-badge { font-size: 0.75rem; background: rgba(255,255,255,0.25); padding: 3px 8px; border-radius: 6px; font-weight: normal; }
     
-    /* Badge Mã Lớp */
-    .code-badge {
-        font-size: 0.75rem; background: rgba(255,255,255,0.3);
-        padding: 3px 8px; border-radius: 4px; font-weight: bold;
-    }
-
-    /* Phần dưới: Nút bấm (Tách riêng để không lỗi layout) */
-    .card-footer {
-        padding: 0; /* Để nút bấm tràn viền */
-        background: #f8f9fa;
-    }
-    
-    /* Chỉnh nút bấm Streamlit cho khớp vào Footer */
     div.stButton > button {
-        width: 100%;
-        border-radius: 0 0 10px 10px; /* Bo góc dưới */
-        border: none;
-        border-top: 1px solid #eee;
-        background-color: transparent;
-        color: #0d6efd;
-        font-weight: 600;
-        padding: 8px 0;
-        transition: all 0.2s;
+        width: 100%; border-radius: 0 0 12px 12px !important; border: 1px solid #e0e0e0;
+        border-top: none; background-color: #ffffff; color: #666; font-size: 0.85rem;
+        padding: 8px 0; margin-top: -15px !important; transition: all 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     div.stButton > button:hover {
-        background-color: #e9ecef;
-        color: #0056b3;
+        background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
     }
-
-    /* Layout */
+    div[data-testid="column"] { padding: 0 6px; }
+    .schedule-item {
+        background: white; border-left: 5px solid #0d6efd;
+        padding: 15px; margin-bottom: 12px; border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
+    }
     .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 10px;
-        margin-bottom: 20px; border: 1px solid #dee2e6; text-align: center; color: #333;
+        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -82,35 +54,22 @@ def parse_weeks(w_str):
     try:
         parts = str(w_str).replace('"', '').split(',')
         for p in parts:
-            if '-' in p:
-                s, e = map(int, p.split('-'))
-                res.extend(range(s, e + 1))
+            if '-' in p: s, e = map(int, p.split('-')); res.extend(range(s, e + 1))
             else: res.append(int(p))
     except: pass
     return res
 
 def parse_time(t_str):
     if pd.isna(t_str) or '-' not in str(t_str): return None, None
-    try:
-        s, e = str(t_str).split('-')
-        return s.strip().zfill(4), e.strip().zfill(4)
+    try: s, e = str(t_str).split('-'); return s.strip().zfill(4), e.strip().zfill(4)
     except: return None, None
 
-def parse_time(t_str):
-    if pd.isna(t_str) or '-' not in str(t_str): return None, None
-    try:
-        s, e = str(t_str).split('-')
-        return s.strip().zfill(4), e.strip().zfill(4)
-    except: return None, None
-
-def check_week(w_str, current_week):
-    return str(current_week) in str(w_str).split(',')
-
-def clean_day(v):
+def check_week(w_str, current_week): return str(current_week) in str(w_str).split(',')
+def clean_day(v): 
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- 4. LOAD DATA ---
+# --- 4. LOAD DATA (FIX CACHE) ---
 @st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
@@ -195,11 +154,10 @@ curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
-# --- VIEW: LIST ---
+# --- MÀN HÌNH 1: LIST ---
 if st.session_state.view_mode == 'list':
     st.sidebar.header("🔍 Bộ Lọc")
-    # Thanh trượt số cột (Quan trọng để fix lỗi hiển thị)
-    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3) 
+    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3) # Fix số cột
     
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay"):
@@ -253,7 +211,9 @@ if st.session_state.view_mode == 'list':
     results = []
     for r in rooms:
         r_sch = df_active[df_active['MY_ROOM'] == r]
-        stt, msg, prio, code = get_status(r_sch, now)
+        # Lấy đủ 4 biến trả về: status, message, priority, CODE
+        stt, msg, prio, code = get_status(r_sch, now) 
+        # Lưu vào dict để dùng bên dưới
         results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
     
     results.sort(key=lambda x: (x['prio'], x['r']))
@@ -261,38 +221,43 @@ if st.session_state.view_mode == 'list':
     if not results:
         st.info("Không có dữ liệu.")
     else:
-        # GRID RENDER
         chunk_size = num_cols
         for i in range(0, len(results), chunk_size):
             cols = st.columns(chunk_size)
-            for idx, item in enumerate(results[i:i+chunk_size]):
+            row_items = results[i:i+chunk_size] # Lấy đúng số lượng item cho hàng này
+            
+            for idx, item in enumerate(row_items):
                 with cols[idx]:
                     if item['st'] == 'FREE': bg_cls, icon = "bg-free", "✅"
                     elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
                     else: bg_cls, icon = "bg-busy", "⛔"
                     
-                    code_html = f'<span class="code-badge">{item["code"]}</span>' if item['code'] and item['code'] != "NULL" else ""
+                    # Logic Badge Code (Đã sửa lỗi KeyError: 'code')
+                    # Vì giờ 'item' chắc chắn có key 'code'
+                    code_text = item['code']
+                    if code_text == "NULL": 
+                        code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
+                    elif code_text: 
+                        code_html = f'<span class="code-badge">{code_text}</span>'
+                    else: 
+                        code_html = ""
 
-                    # Wrapper
                     st.markdown(f"""
-                    <div class="room-card-wrapper">
-                        <div class="card-header {bg_cls}">
-                            <div class="room-title">
-                                <span>{icon} {item['r']}</span>
-                                {code_html}
-                            </div>
-                            <div class="room-sub">{item['msg']}</div>
+                    <div class="card-top {bg_cls}">
+                        <div class="room-header">
+                            <span>{icon} {item['r']}</span>
+                            {code_html}
                         </div>
+                        <div class="room-info">{item['msg']}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Nút bấm riêng biệt (Không bị lỗi CSS)
                     if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.rerun()
 
-# --- VIEW: DETAIL ---
+# --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
@@ -316,7 +281,7 @@ elif st.session_state.view_mode == 'detail':
         for _, row in df_week.iterrows():
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
-            <div style="background:white; border-left:5px solid #0d6efd; padding:15px; margin-bottom:10px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); color:#333;">
+            <div class="schedule-item">
                 <div style="font-weight:bold; font-size:1.1rem">Thứ {d} | {row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
                 <div style="color:#d63384; font-weight:600">{row['MY_NAME']}</div>
                 <div style="font-size:0.9rem; color:#666">Mã lớp: {row['MY_CODE']}</div>
