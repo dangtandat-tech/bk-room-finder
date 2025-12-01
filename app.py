@@ -7,117 +7,103 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (ĐÃ CĂN CHỈNH LỀ CHUẨN) ---
+# --- 2. CSS (TỐI ƯU HÓA GIAO DIỆN) ---
 st.markdown("""
 <style>
     /* Card Container */
     .room-card-box {
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        border: 1px solid #e5e7eb;
-        margin-bottom: 10px;
+        background-color: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Đổ bóng nhẹ */
+        border: 1px solid #f0f0f0; /* Viền siêu nhạt */
+        margin-bottom: 15px;
         overflow: hidden;
-        transition: transform 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s;
         height: 100%;
         display: flex;
         flex-direction: column;
     }
     .room-card-box:hover {
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         transform: translateY(-2px);
-        border-color: #d1d5db;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
     }
 
-    /* Dải màu trạng thái */
-    .status-strip-free { border-left: 5px solid #10b981; }
-    .status-strip-soon { border-left: 5px solid #f59e0b; }
-    .status-strip-busy { border-left: 5px solid #ef4444; }
+    /* Dải màu trạng thái bên trái */
+    .status-strip-free { border-left: 5px solid #28a745; }
+    .status-strip-soon { border-left: 5px solid #ffc107; }
+    .status-strip-busy { border-left: 5px solid #dc3545; }
 
     /* Nội dung Card */
     .card-body {
-        padding: 12px 15px;
+        padding: 15px;
         flex-grow: 1;
     }
 
-    /* Header */
-    .card-header {
+    /* Header: Tên phòng */
+    .room-name {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #333333; /* Chữ màu đậm */
+        margin-bottom: 5px;
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 8px;
-    }
-    .room-name {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #111827;
-        margin: 0;
+        align-items: center;
     }
     
     /* Badge trạng thái */
     .status-badge {
         font-size: 0.7rem;
-        padding: 2px 8px;
+        padding: 3px 8px;
         border-radius: 12px;
         font-weight: 600;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    .badge-free { background-color: #d1fae5; color: #065f46; }
-    .badge-soon { background-color: #fef3c7; color: #92400e; }
-    .badge-busy { background-color: #fee2e2; color: #991b1b; }
+    .badge-free { background-color: #e6f9ed; color: #28a745; }
+    .badge-soon { background-color: #fff8e1; color: #b78900; }
+    .badge-busy { background-color: #fdeaea; color: #dc3545; }
 
-    /* Thông tin chính */
-    .info-text {
-        font-size: 0.9rem;
-        color: #4b5563;
-        line-height: 1.4;
+    /* Thông tin chính (Giờ, Trạng thái) */
+    .info-primary {
+        font-size: 0.95rem;
+        color: #444; /* Màu xám đậm dễ đọc */
         margin-bottom: 4px;
+        font-weight: 500;
     }
-    .highlight-time { font-weight: 600; color: #111827; }
-    
-    /* Thông tin phụ */
-    .sub-text {
-        font-size: 0.8rem;
-        color: #6b7280;
-        margin-top: 6px;
-        display: flex;
-        align-items: center;
-        gap: 5px;
+    .info-secondary {
+        font-size: 0.85rem;
+        color: #777; /* Màu xám nhạt hơn cho thông tin phụ */
     }
 
-    /* Nút bấm (Footer) */
+    /* Nút bấm (Minimalist) */
     div.stButton > button {
         width: 100%;
-        border-radius: 0;
         border: none;
-        border-top: 1px solid #f3f4f6;
-        background-color: #f9fafb;
-        color: #2563eb;
+        background-color: transparent; /* Nền trong suốt */
+        color: #007bff; /* Màu xanh link */
         font-size: 0.85rem;
         font-weight: 500;
         padding: 8px 0;
         margin: 0 !important;
-        transition: background 0.2s;
+        border-top: 1px solid #f8f9fa; /* Gạch ngang mờ ngăn cách */
+        transition: color 0.2s, background-color 0.2s;
     }
     div.stButton > button:hover {
-        background-color: #eff6ff;
-        color: #1d4ed8;
-    }
-
-    /* Page Header */
-    .page-header {
-        background: white; padding: 15px 20px; 
-        border-radius: 10px; border: 1px solid #e5e7eb;
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        color: #0056b3;
     }
     
-    /* Schedule Detail Item */
-    .schedule-item {
-        background: white; border-left: 4px solid #2563eb; 
-        padding: 15px; margin-bottom: 10px; border-radius: 8px; 
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    /* Layout */
+    .header-info {
+        background-color: #f8f9fa; padding: 15px; border-radius: 10px;
+        margin-bottom: 20px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
+    .schedule-item {
+        background: white; border-left: 4px solid #007bff;
+        padding: 12px; margin-bottom: 10px; border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05); color: #333;
+    }
+    div[data-testid="column"] { padding: 0 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,14 +149,9 @@ def load_and_process():
     
     for f in files:
         if not os.path.exists(f):
-            found = False
             for sf in server_files:
-                if sf.lower() == f.lower():
-                    f = sf
-                    found = True
-                    break
-            if not found: continue
-            
+                if sf.lower() == f.lower(): f = sf; break
+            else: continue
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -250,15 +231,9 @@ curr_wd = py_to_bk.get(now.weekday(), '2')
 # --- MÀN HÌNH DANH SÁCH ---
 if st.session_state.view_mode == 'list':
     st.markdown(f"""
-    <div class="page-header">
-        <div>
-            <div style="font-size:1.5rem; font-weight:800; color:#111827">{now.strftime('%H:%M')}</div>
-            <div style="color:#6b7280; font-weight:500">Thứ {curr_wd}, {now.strftime('%d/%m/%Y')}</div>
-        </div>
-        <div style="text-align:right">
-            <div style="font-size:0.9rem; color:#6b7280">Tuần học</div>
-            <div style="font-size:1.5rem; font-weight:800; color:#2563eb">{curr_week}</div>
-        </div>
+    <div class="header-info">
+        <h3 style="margin:0; color:#d63384">{now.strftime('%H:%M')} | Thứ {curr_wd} | {now.strftime('%d/%m/%Y')}</h3>
+        <p style="margin:0">Tuần học: <b>{curr_week}</b></p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -338,17 +313,18 @@ if st.session_state.view_mode == 'list':
                     <div class="room-card-box {css_cls}">
                         <div class="card-body">
                             <div class="card-header">
-                                <h3 class="room-name">{item['r']}</h3>
+                                <span class="room-name">{item['r']}</span>
                                 <span class="status-badge {badge_cls}">{badge_txt}</span>
                             </div>
-                            <div class="info-text highlight-time">{item['m1']}</div>
-                            <div class="info-text">{item['m2']}</div>
-                            <div class="sub-text"><span>📌 {code_info}</span></div>
+                            <div class="info-primary">{item['m1']}</div>
+                            <div class="info-secondary">{item['m2']}</div>
+                            <div class="info-secondary" style="font-size:0.75rem; margin-top:4px">{code_info}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button("Xem lịch chi tiết ➜", key=f"btn_{item['r']}_{idx}"):
+                    # Nút bấm đơn giản (Ghost Button)
+                    if st.button("Xem chi tiết ▾", key=f"btn_{item['r']}_{idx}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.rerun()
@@ -358,6 +334,7 @@ elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
     with c1:
+        st.write("") # Spacer
         if st.button("⬅️ Quay lại", key="btn_back"):
             st.session_state.view_mode = 'list'
             st.rerun()
@@ -382,12 +359,12 @@ elif st.session_state.view_mode == 'detail':
             <div class="schedule-item">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <div style="font-weight:700; font-size:1.1rem; color:#1f2937">Thứ {d}</div>
-                        <div style="color:#4b5563; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
+                        <div style="font-weight:700; font-size:1.1rem; color:#333">Thứ {d}</div>
+                        <div style="color:#666; font-size:0.9rem">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
                     </div>
                     <div style="text-align:right">
-                        <div style="color:#d97706; font-weight:600">{row['MY_NAME']}</div>
-                        <div style="font-size:0.8rem; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px">{row['MY_CODE']}</div>
+                        <div style="color:#007bff; font-weight:600">{row['MY_NAME']}</div>
+                        <div style="font-size:0.8rem; color:#888;">Mã lớp: {row['MY_CODE']}</div>
                     </div>
                 </div>
             </div>
