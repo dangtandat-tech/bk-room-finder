@@ -77,7 +77,7 @@ st.markdown("""
 START_DATE_K70 = datetime(2025, 9, 8)
 TZ_VN = pytz.timezone('Asia/Ho_Chi_Minh')
 
-# --- 3. HELPER FUNCTIONS (ĐƯA HẾT RA NGOÀI ĐỂ TRÁNH LỖI) ---
+# --- 3. HELPER FUNCTIONS ---
 def parse_weeks(w_str):
     if pd.isna(w_str): return []
     res = []
@@ -106,7 +106,7 @@ def clean_day(v):
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- HÀM LOGIC TRẠNG THÁI (ĐƯA RA NGOÀI) ---
+# --- HÀM LOGIC TRẠNG THÁI ---
 def get_room_status(schedule, c_time_full):
     c_hm = c_time_full.hour * 60 + c_time_full.minute
     slots = []
@@ -148,27 +148,23 @@ def get_room_status(schedule, c_time_full):
     # 3. Hết tiết (XANH)
     return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
 
-# --- 4. LOAD DATA ---
-@st.cache(allow_output_mutation=True)
+# --- 4. LOAD DATA (Cập nhật Cache mới) ---
+@st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
     dfs = []
     encodings = ['utf-8-sig', 'utf-16', 'utf-8', 'cp1258', 'latin1']
     
-    # Check file
-    found_any = False
     server_files = os.listdir()
     
     for f in files:
         if not os.path.exists(f):
-            # Fallback tìm file không phân biệt hoa thường
             for sf in server_files:
                 if sf.lower() == f.lower():
                     f = sf
                     break
-            else: continue # Không tìm thấy thì bỏ qua
+            else: continue
             
-        found_any = True
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -181,7 +177,6 @@ def load_and_process():
     if not dfs: return pd.DataFrame()
     df_raw = pd.concat(dfs, ignore_index=True)
 
-    # Auto detect cols
     cols = df_raw.columns.tolist()
     def fc(kws):
         for c in cols:
@@ -231,7 +226,6 @@ if 'current_time' not in st.session_state: st.session_state.current_time = datet
 
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
-# Load Data an toàn
 try:
     df = load_and_process()
 except Exception as e:
@@ -250,7 +244,7 @@ curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
-# --- MÀN HÌNH 1: DANH SÁCH ---
+# --- MÀN HÌNH 1: LIST ---
 if st.session_state.view_mode == 'list':
     st.sidebar.header("🔍 Bộ Lọc")
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
@@ -261,7 +255,7 @@ if st.session_state.view_mode == 'list':
         else:
             if st.button("Cập nhật giờ"):
                 st.session_state.current_time = datetime.now(TZ_VN)
-                st.experimental_rerun()
+                st.rerun() # Dùng st.rerun() thay cho experimental_rerun()
 
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
     sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings)
@@ -273,7 +267,6 @@ if st.session_state.view_mode == 'list':
     </div>
     """, unsafe_allow_html=True)
 
-    # Filter
     df_b = df[df['Building'] == sel_b]
     df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
     df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
@@ -283,13 +276,11 @@ if st.session_state.view_mode == 'list':
     results = []
     for r in rooms:
         r_sch = df_active[df_active['MY_ROOM'] == r]
-        # Gọi hàm get_room_status đã đưa ra ngoài
         stt, msg, prio, code = get_room_status(r_sch, now)
         results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
     
     results.sort(key=lambda x: (x['prio'], x['r']))
 
-    # RENDER
     if not results:
         st.info("Không có dữ liệu.")
     else:
@@ -302,7 +293,6 @@ if st.session_state.view_mode == 'list':
                     elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
                     else: bg_cls, icon = "bg-busy", "⛔"
                     
-                    # Logic Badge Code
                     code_text = item['code']
                     if code_text == "NULL": 
                         code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
@@ -324,17 +314,16 @@ if st.session_state.view_mode == 'list':
                     if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
-                        st.experimental_rerun()
+                        st.rerun() # Dùng st.rerun()
 
-# --- MÀN HÌNH 2: CHI TIẾT ---
+# --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
-    
     c1, c2 = st.columns([1, 6])
     with c1:
         if st.button("⬅️ Quay lại"):
             st.session_state.view_mode = 'list'
-            st.experimental_rerun()
+            st.rerun() # Dùng st.rerun()
     with c2:
         st.markdown(f"## 📅 Lịch học: **{r_name}** (Tuần {curr_week})")
         
