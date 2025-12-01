@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import pytz # Thư viện múi giờ
 import os
 
 # --- 1. CẤU HÌNH TRANG ---
@@ -11,47 +12,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS TÙY CHỈNH (COMPACT STYLE) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     .room-card {
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-bottom: 8px;
-        color: white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        transition: transform 0.1s;
+        padding: 8px 12px; border-radius: 6px; margin-bottom: 8px;
+        color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border: 1px solid rgba(255,255,255,0.1);
     }
-    .room-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.15);
-    }
-    
-    .status-free { background-color: #28a745; border-left: 4px solid #145523; } /* Xanh */
-    .status-soon { background-color: #ffc107; color: #212529 !important; border-left: 4px solid #9c7500; } /* Vàng */
-    .status-busy { background-color: #dc3545; border-left: 4px solid #881622; } /* Đỏ */
-
-    .room-name {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin-bottom: 2px;
-        display: flex; align-items: center; gap: 8px;
-    }
-    .room-status {
-        font-size: 0.85rem;
-        line-height: 1.3;
-        opacity: 0.95;
-    }
-    
+    .status-free { background-color: #28a745; border-left: 4px solid #145523; }
+    .status-soon { background-color: #ffc107; color: #212529 !important; border-left: 4px solid #9c7500; }
+    .status-busy { background-color: #dc3545; border-left: 4px solid #881622; }
+    .room-name { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .room-status { font-size: 0.85rem; line-height: 1.3; }
     .header-info {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        border: 1px solid #dee2e6;
-        text-align: center;
-        color: #333;
+        background-color: #f8f9fa; padding: 10px; border-radius: 8px;
+        margin-bottom: 15px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
     div[data-testid="column"] { padding: 0 4px; }
 </style>
@@ -94,7 +70,7 @@ def load_and_process_data():
     c_name = find_col(['tên_hp', 'ten_hp', 'name'])
     
     if not c_room or not c_time:
-        st.error("⚠️ Thiếu cột Phòng/Thời gian trong file CSV.")
+        st.error("⚠️ Thiếu cột Phòng/Thời gian.")
         return pd.DataFrame()
 
     df = pd.DataFrame()
@@ -132,6 +108,7 @@ def load_and_process_data():
     df['End'] = t_parsed.apply(lambda x: x[1])
     df = df.dropna(subset=['Start', 'End'])
 
+    # Tách Tòa: Lấy phần trước dấu gạch ngang
     def extract_building(room_name):
         s = str(room_name).strip()
         if '-' in s: return s.split('-')[0]
@@ -144,20 +121,31 @@ def load_and_process_data():
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
 df = load_and_process_data()
-if df.empty: st.stop()
+if df.empty:
+    st.error("Chưa load được dữ liệu. Hãy kiểm tra lại tên file trên GitHub.")
+    st.stop()
 
 # Sidebar
 st.sidebar.header("🔍 Bộ Lọc")
+
+# === FIX LỖI MÚI GIỜ Ở ĐÂY ===
+tz_VN = pytz.timezone('Asia/Ho_Chi_Minh') # Định nghĩa múi giờ VN
+
 with st.sidebar.expander("🛠️ Chỉnh giờ (Test)"):
     if st.checkbox("Bật chỉnh tay"):
-        d_input = st.date_input("Ngày", datetime.now())
-        t_input = st.time_input("Giờ", datetime.now().time())
+        d_input = st.date_input("Ngày", datetime.now(tz_VN))
+        t_input = st.time_input("Giờ", datetime.now(tz_VN).time())
+        # Kết hợp ngày giờ và gán timezone VN
         now = datetime.combine(d_input, t_input)
+        now = tz_VN.localize(now) 
     else:
-        now = datetime.now()
+        # Lấy giờ thực tế tại VN
+        now = datetime.now(tz_VN)
         if st.button("Cập nhật giờ"): st.experimental_rerun()
 
-delta = now - START_DATE_K70
+# Tính tuần (cần loại bỏ timezone để trừ ngày tháng)
+now_naive = now.replace(tzinfo=None) # Đưa về dạng không múi giờ để tính toán ngày
+delta = now_naive - START_DATE_K70
 curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
@@ -182,46 +170,50 @@ df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
 def check_week(w, cw): return str(cw) in str(w).split(',')
 df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-# --- HÀM CHECK STATUS ---
-def get_status(schedule, c_time):
+# Check Status (Lưu ý: c_time ở đây đã có timezone VN nếu lấy auto, hoặc có tz nếu chỉnh tay)
+# Nhưng dữ liệu lịch học (Start/End) là chuỗi giờ phút thuần túy (HHMM)
+# Cần so sánh cẩn thận
+def get_status(schedule, c_time_full):
+    # Lấy giờ phút hiện tại để so sánh
+    c_hm = c_time_full.hour * 60 + c_time_full.minute
+    
     slots = []
     for _, row in schedule.iterrows():
         try:
-            sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
-            eh, em = int(row['End'][:2]), int(row['End'][2:])
-            s_dt = c_time.replace(hour=sh, minute=sm, second=0)
-            e_dt = c_time.replace(hour=eh, minute=em, second=0)
-            slots.append((s_dt, e_dt, row['MY_NAME']))
+            # Đổi giờ học ra phút (Ví dụ: 0645 -> 6*60 + 45 = 405)
+            s_h, s_m = int(row['Start'][:2]), int(row['Start'][2:])
+            e_h, e_m = int(row['End'][:2]), int(row['End'][2:])
+            
+            s_val = s_h * 60 + s_m
+            e_val = e_h * 60 + e_m
+            
+            slots.append((s_val, e_val, row['MY_NAME'], f"{s_h:02d}:{s_m:02d}", f"{e_h:02d}:{e_m:02d}"))
         except: continue
     
     slots.sort(key=lambda x: x[0])
     
-    # 1. Đang học (ĐỎ)
-    for s, e, n in slots:
-        if s <= c_time <= e:
-            l = e - c_time
-            h, m = l.seconds//3600, (l.seconds//60)%60
-            return "BUSY", f"Đang học: {n}<br>Đến: {e.strftime('%H:%M')} (Còn {h}h {m}p)", 3
+    # 1. Đang học
+    for s, e, n, s_str, e_str in slots:
+        if s <= c_hm <= e:
+            l = e - c_hm
+            h, m = l // 60, l % 60
+            return "BUSY", f"Đang học: {n}<br>Đến: {e_str} (Còn {h}h {m}p)", 3
             
-    # 2. Sắp học (VÀNG/XANH)
-    for s, e, n in slots:
-        if s > c_time:
-            diff = (s - c_time).total_seconds()/60
-            h, m = int(diff//60), int(diff%60)
-            t_str = f"{h}h {m}p" if h>0 else f"{m}p"
+    # 2. Sắp học
+    for s, e, n, s_str, e_str in slots:
+        if s > c_hm:
+            diff = s - c_hm
+            h, m = diff // 60, diff % 60
+            t_str = f"{h}h {m}p" if h > 0 else f"{m}p"
+            next_info = f"Tiết sau: {n}<br>Bắt đầu: <b>{s_str}</b>"
             
-            # Thông báo tiết sau
-            next_info = f"Tiết sau: {n}<br>Bắt đầu: <b>{s.strftime('%H:%M')}</b>"
-            
-            if diff >= 45: # Trống >= 45p -> Xanh
+            if diff >= 45: 
                 return "FREE", f"TRỐNG: {t_str}<br>{next_info}", 1
-            else: # Trống < 45p -> Vàng
+            else: 
                 return "SOON", f"Sắp học trong {t_str}<br>{next_info}", 2
                 
-    # 3. Hết lịch -> XANH
     return "FREE", "TRỐNG đến hết ngày hôm nay", 0
 
-# --- HIỂN THỊ ---
 rooms = sorted(df_b['MY_ROOM'].unique())
 results = []
 
@@ -232,7 +224,7 @@ for r in rooms:
 
 results.sort(key=lambda x: (x['prio'], x['r']))
 
-cols = st.columns(4) # Grid 4 cột
+cols = st.columns(4)
 if not results:
     st.info(f"Không có dữ liệu cho tòa {selected_b}.")
 else:
