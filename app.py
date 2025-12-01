@@ -7,15 +7,16 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (GIỮ NGUYÊN GIAO DIỆN ĐẸP) ---
+# --- 2. CSS (TỐI ƯU DARK MODE & NÚT BẤM RỘNG) ---
 st.markdown("""
 <style>
     /* Card Container */
     .room-card-box {
-        background-color: #ffffff;
+        /* Dùng màu nền sáng nhẹ để nổi bật trên nền đen của Dark Mode */
+        background-color: #ffffff; 
         border-radius: 12px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        border: 1px solid #f0f0f0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: 1px solid rgba(0,0,0,0.1);
         margin-bottom: 15px;
         overflow: hidden;
         transition: transform 0.2s, box-shadow 0.2s;
@@ -23,58 +24,85 @@ st.markdown("""
         display: flex;
         flex-direction: column;
     }
+    
+    /* Hiệu ứng Hover */
     .room-card-box:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+        border-color: #0d6efd;
     }
 
     /* Dải màu trạng thái */
-    .status-strip-free { border-left: 5px solid #28a745; }
-    .status-strip-soon { border-left: 5px solid #ffc107; }
-    .status-strip-busy { border-left: 5px solid #dc3545; }
+    .status-strip-free { border-left: 6px solid #28a745; }
+    .status-strip-soon { border-left: 6px solid #ffc107; }
+    .status-strip-busy { border-left: 6px solid #dc3545; }
 
     /* Nội dung Card */
-    .card-body { padding: 15px; flex-grow: 1; }
+    .card-body {
+        padding: 15px 18px; /* Tăng khoảng cách lề */
+        flex-grow: 1;
+    }
 
     /* Header: Tên phòng */
     .room-name {
-        font-size: 1.3rem; font-weight: 700; color: #333;
-        margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #212529; /* Màu chữ đậm luôn dễ đọc trên nền trắng */
+        margin-bottom: 8px;
+        display: flex; justify-content: space-between; align-items: center;
     }
     
     /* Badge trạng thái */
     .status-badge {
-        font-size: 0.7rem; padding: 3px 8px; border-radius: 12px;
-        font-weight: 600; text-transform: uppercase;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    .badge-free { background-color: #e6f9ed; color: #28a745; }
-    .badge-soon { background-color: #fff8e1; color: #b78900; }
-    .badge-busy { background-color: #fdeaea; color: #dc3545; }
+    .badge-free { background-color: #d1fae5; color: #065f46; }
+    .badge-soon { background-color: #fff3cd; color: #856404; }
+    .badge-busy { background-color: #f8d7da; color: #721c24; }
 
     /* Thông tin chính */
-    .info-primary { font-size: 0.95rem; color: #444; margin-bottom: 4px; font-weight: 500; }
-    .info-secondary { font-size: 0.85rem; color: #777; }
-
-    /* Nút bấm */
-    div.stButton > button {
-        width: 100%; border: none; background-color: transparent;
-        color: #007bff; font-size: 0.85rem; font-weight: 500;
-        padding: 8px 0; margin: 0 !important;
-        border-top: 1px solid #f8f9fa; transition: background-color 0.2s;
+    .info-primary {
+        font-size: 1rem; color: #333; margin-bottom: 5px; font-weight: 600;
     }
-    div.stButton > button:hover { background-color: #f8f9fa; color: #0056b3; }
+    .info-secondary {
+        font-size: 0.9rem; color: #666;
+    }
+
+    /* Nút bấm (Footer) - Đã chỉnh rộng hơn */
+    div.stButton > button {
+        width: 100%;
+        border: none;
+        background-color: #f8f9fa; /* Nền xám rất nhạt */
+        color: #0d6efd; /* Màu xanh link */
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 12px 0; /* Tăng padding để nút cao và thoáng hơn */
+        margin: 0 !important;
+        border-top: 1px solid #eee;
+        transition: background-color 0.2s;
+        border-radius: 0 0 12px 12px !important; /* Bo góc dưới khớp với card */
+    }
+    div.stButton > button:hover {
+        background-color: #e9ecef;
+        color: #0a58ca;
+    }
     
     /* Layout */
+    div[data-testid="column"] { padding: 0 8px; }
     .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 10px;
-        margin-bottom: 20px; border: 1px solid #dee2e6; text-align: center; color: #333;
+        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
     .schedule-item {
         background: white; border-left: 4px solid #007bff;
         padding: 12px; margin-bottom: 10px; border-radius: 6px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05); color: #333;
     }
-    div[data-testid="column"] { padding: 0 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -88,15 +116,13 @@ def parse_weeks(w_str):
     try:
         parts = str(w_str).replace('"', '').split(',')
         for p in parts:
-            if '-' in p: s, e = map(int, p.split('-')); res.extend(range(s, e + 1))
-            else: res.append(int(p))
+            if '-' in p:
+                s, e = map(int, p.split('-'))
+                res.extend(range(s, e + 1))
+            else:
+                res.append(int(p))
     except: pass
     return res
-
-def parse_time(t_str):
-    if pd.isna(t_str) or '-' not in str(t_str): return None, None
-    try: s, e = str(t_str).split('-'); return s.strip().zfill(4), e.strip().zfill(4)
-    except: return None, None
 
 def parse_time(t_str):
     if pd.isna(t_str) or '-' not in str(t_str): return None, None
@@ -171,22 +197,23 @@ def load_and_process():
 
     df['Parsed_Weeks'] = df['MY_WEEK'].apply(lambda x: ",".join(map(str, parse_weeks(x))))
 
+    # --- FIX NHA A: Thêm .strip() để xử lý khoảng trắng thừa ---
     def extract_building(room_name):
         s = str(room_name).strip()
-        if '-' in s: return s.split('-')[0]
+        if '-' in s: 
+            return s.split('-')[0].strip() # Thêm .strip() ở đây
         return "Khác"
     df['Building'] = df['MY_ROOM'].apply(extract_building)
     return df
 
 # --- 5. APP LOGIC ---
-# Khởi tạo Session State
 if 'view_mode' not in st.session_state: st.session_state.view_mode = 'list'
 if 'selected_room_data' not in st.session_state: st.session_state.selected_room_data = None
 if 'current_time' not in st.session_state: st.session_state.current_time = datetime.now(TZ_VN)
 
-# LOGIC QUAN TRỌNG: Lưu trạng thái tòa nhà
+# --- DEFAULT D3 (FIX RESET) ---
 if 'selected_building_state' not in st.session_state:
-    st.session_state.selected_building_state = "D3" # Mặc định là D3
+    st.session_state.selected_building_state = "D3"
 
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
@@ -221,25 +248,15 @@ if st.session_state.view_mode == 'list':
                 st.session_state.current_time = datetime.now(TZ_VN)
                 st.rerun()
 
-    # --- LOGIC CHỌN TÒA NHÀ (FIX RESET) ---
+    # --- LOGIC CHỌN TÒA (DEFAULT D3) ---
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
-    
-    # Tìm index của tòa nhà đang lưu trong session
     try:
-        default_index = buildings.index(st.session_state.selected_building_state)
+        def_idx = buildings.index(st.session_state.selected_building_state)
     except:
-        default_index = 0 # Nếu D3 không có hoặc lỗi thì về đầu danh sách
-    
-    # Widget Selectbox
-    sel_b = st.sidebar.selectbox(
-        "📍 Chọn Tòa Nhà", 
-        buildings, 
-        index=default_index,
-        key="sb_building_select"
-    )
-    
-    # Cập nhật ngược lại vào session khi người dùng chọn
-    st.session_state.selected_building_state = sel_b
+        def_idx = 0
+        
+    sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings, index=def_idx, key="sel_b")
+    st.session_state.selected_building_state = sel_b # Lưu lại lựa chọn
 
     st.markdown(f"""
     <div class="header-info">
@@ -290,7 +307,7 @@ if st.session_state.view_mode == 'list':
     results.sort(key=lambda x: (x['prio'], x['r']))
 
     if not results:
-        st.info("Không có dữ liệu.")
+        st.info(f"Không tìm thấy dữ liệu cho tòa {sel_b}.")
     else:
         chunk_size = num_cols
         for i in range(0, len(results), chunk_size):
@@ -316,7 +333,7 @@ if st.session_state.view_mode == 'list':
                             </div>
                             <div class="info-primary">{item['m1']}</div>
                             <div class="info-secondary">{item['m2']}</div>
-                            <div class="info-secondary" style="font-size:0.75rem; margin-top:4px">{code_info}</div>
+                            <div class="info-secondary" style="font-size:0.8rem; margin-top:4px">{code_info}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
