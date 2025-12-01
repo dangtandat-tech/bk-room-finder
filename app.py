@@ -3,79 +3,124 @@ import pandas as pd
 from datetime import datetime
 import pytz
 import os
+import re
 
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (GIAO DIỆN CARD LIỀN KHỐI - ĐẸP NHẤT) ---
+# --- 2. CSS (GIAO DIỆN MODERN LIGHT UI - ĐẸP & HIỆN ĐẠI) ---
 st.markdown("""
 <style>
-    /* Card Top (Thông tin) */
-    .card-top {
-        padding: 12px 15px;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        color: white;
-        position: relative;
+    /* Container chính của thẻ */
+    .room-card-container {
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        overflow: hidden; /* Để nút bấm bên dưới cũng được bo góc */
+        transition: all 0.3s ease;
+        height: 100%; /* Để các thẻ trong cùng hàng cao bằng nhau */
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #f0f0f0;
     }
-    
-    /* Màu nền */
-    .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
-    .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
-    .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
-
-    /* Typography */
-    .room-header { 
-        font-size: 1.3rem; font-weight: 800; 
-        display: flex; justify-content: space-between; align-items: center; 
-    }
-    .room-info { 
-        font-size: 0.9rem; margin-top: 6px; 
-        line-height: 1.4; opacity: 0.95; font-weight: 500;
-    }
-    
-    /* Badge Mã Lớp */
-    .code-badge { 
-        font-size: 0.75rem; 
-        background: rgba(255,255,255,0.25); 
-        padding: 3px 8px; 
-        border-radius: 6px; 
-        font-weight: bold; 
-        border: 1px solid rgba(255,255,255,0.4);
-        min-width: 60px;
-        text-align: center;
+    .room-card-container:hover {
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        transform: translateY(-3px);
+        border-color: #e0e0e0;
     }
 
-    /* Nút bấm chìm bên dưới (Fix lỗi giao diện) */
+    /* Phần nội dung HTML bên trên */
+    .card-content {
+        padding: 16px;
+        flex-grow: 1; /* Chiếm phần lớn không gian để đẩy nút xuống đáy */
+    }
+    /* Các biến thể màu sắc cho viền trái */
+    .border-free { border-left: 6px solid #28a745; }
+    .border-soon { border-left: 6px solid #ffc107; }
+    .border-busy { border-left: 6px solid #dc3545; }
+
+    /* Header: Tên phòng + Badge */
+    .card-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+    .room-name-group {
+        display: flex;
+        align-items: center;
+    }
+    .room-icon { font-size: 1.4rem; margin-right: 8px; }
+    .room-name {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #2c3e50;
+    }
+    /* Badge mã lớp */
+    .code-badge {
+        font-size: 0.75rem;
+        background: #f1f3f5;
+        color: #495057;
+        padding: 4px 10px;
+        border-radius: 20px; /* Bo tròn kiểu viên thuốc */
+        font-weight: 700;
+        white-space: nowrap;
+        border: 1px solid #e9ecef;
+    }
+
+    /* Phần thông tin chi tiết (msg) */
+    .room-detail-msg {
+        font-size: 0.95rem;
+        color: #666;
+        line-height: 1.5;
+    }
+    .msg-main {
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 4px;
+    }
+    .msg-sub {
+        font-size: 0.85rem;
+        color: #888;
+    }
+    /* Màu text highlight */
+    .text-free { color: #28a745; }
+    .text-soon { color: #d9a406; } /* Màu vàng tối hơn chút để dễ đọc trên nền trắng */
+    .text-busy { color: #dc3545; }
+
+    /* Nút bấm Streamlit ở dưới (Phẳng & Liền mạch) */
     div.stButton > button {
         width: 100%;
-        border-radius: 0 0 12px 12px !important;
-        border: 1px solid #e0e0e0;
-        border-top: none;
-        background-color: #ffffff;
-        color: #666;
-        font-size: 0.85rem;
-        padding: 8px 0;
-        margin-top: -16px !important; /* Kéo lên dính vào card */
+        border-radius: 0; /* Bỏ bo góc riêng của nút */
+        border: none;
+        border-top: 1px solid #f0f0f0;
+        background-color: #fcfcfc;
+        color: #0d6efd;
+        font-weight: 600;
+        padding: 12px 0;
+        margin: 0 !important; /* Reset margin để dính liền */
         transition: all 0.2s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     div.stButton > button:hover {
-        background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
+        background-color: #f0f2f5;
+        color: #0a58ca;
     }
     
-    /* Layout */
-    div[data-testid="column"] { padding: 0 6px; }
-    .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
-    }
+    /* Tinh chỉnh layout cột */
+    div[data-testid="column"] { padding: 0 10px; margin-bottom: 20px; }
+
+    /* Các phần khác giữ nguyên */
     .schedule-item {
         background: white; border-left: 5px solid #0d6efd;
         padding: 15px; margin-bottom: 12px; border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
     }
+    .header-info {
+        background-color: #fff; padding: 20px; border-radius: 12px;
+        margin-bottom: 30px; border: 1px solid #e0e0e0; text-align: center; color: #333;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .header-info h3 { color: #d63384; font-weight: 800; letter-spacing: -0.5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,7 +156,7 @@ def clean_day(v):
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- 4. LOAD DATA (DÙNG st.cache_data CHO BẢN MỚI) ---
+# --- 4. LOAD DATA ---
 @st.cache_data
 def load_and_process():
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
@@ -121,15 +166,12 @@ def load_and_process():
     server_files = os.listdir()
     
     for f in files:
-        # Cơ chế tìm file không phân biệt hoa thường (Linux fix)
         if not os.path.exists(f):
-            found = False
             for sf in server_files:
                 if sf.lower() == f.lower():
                     f = sf
-                    found = True
                     break
-            if not found: continue
+            else: continue
             
         for enc in encodings:
             try:
@@ -211,8 +253,8 @@ curr_wd = py_to_bk.get(now.weekday(), '2')
 
 # --- MÀN HÌNH 1: LIST ---
 if st.session_state.view_mode == 'list':
-    st.sidebar.header("🔍 Bộ Lọc")
-    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 4, 3, key="num_cols_slider")
+    st.sidebar.header("🔍 Bộ Lọc & Giao diện")
+    num_cols = st.sidebar.slider("Số cột hiển thị", 1, 5, 3, key="num_cols_slider", help="Kéo để thay đổi kích thước thẻ")
     
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay", key="chk_manual"):
@@ -222,15 +264,15 @@ if st.session_state.view_mode == 'list':
         else:
             if st.button("Cập nhật giờ", key="btn_update"):
                 st.session_state.current_time = datetime.now(TZ_VN)
-                st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
+                st.rerun()
 
     buildings = sorted([b for b in df['Building'].unique() if b != 'Khác'])
     sel_b = st.sidebar.selectbox("📍 Chọn Tòa Nhà", buildings, key="sel_build")
 
     st.markdown(f"""
     <div class="header-info">
-        <h3 style="margin:0; color:#d63384">{now.strftime('%H:%M')} | Thứ {curr_wd} | {now.strftime('%d/%m/%Y')}</h3>
-        <p style="margin:0">Tuần học: <b>{curr_week}</b></p>
+        <h3 style="margin:0">{now.strftime('%H:%M')} <span style="color:#333">|</span> Thứ {curr_wd} <span style="color:#333">|</span> {now.strftime('%d/%m/%Y')}</h3>
+        <p style="margin:5px 0 0 0; font-size: 1.1rem">Tuần học: <b>{curr_week}</b></p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -278,7 +320,7 @@ if st.session_state.view_mode == 'list':
     results.sort(key=lambda x: (x['prio'], x['r']))
 
     if not results:
-        st.info("Không có dữ liệu.")
+        st.info("Không có dữ liệu phòng cho tòa nhà này hôm nay.")
     else:
         chunk_size = num_cols
         for i in range(0, len(results), chunk_size):
@@ -287,51 +329,78 @@ if st.session_state.view_mode == 'list':
             
             for idx, item in enumerate(row_items):
                 with cols[idx]:
-                    if item['st'] == 'FREE': bg_cls, icon = "bg-free", "✅"
-                    elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
-                    else: bg_cls, icon = "bg-busy", "⛔"
+                    # 1. Xác định Class màu sắc và Icon
+                    if item['st'] == 'FREE':
+                        border_cls = "border-free"
+                        text_cls = "text-free"
+                        icon = "✅"
+                    elif item['st'] == 'SOON':
+                        border_cls = "border-soon"
+                        text_cls = "text-soon"
+                        icon = "⚠️"
+                    else:
+                        border_cls = "border-busy"
+                        text_cls = "text-busy"
+                        icon = "⛔"
                     
+                    # 2. Xử lý Badge Mã lớp
                     code_text = item['code']
-                    if str(code_text) == "NULL": 
-                        code_html = '<span class="code-badge" style="opacity:0.6">NULL</span>'
-                    elif code_text: 
+                    if str(code_text) == "NULL" or not code_text:
+                        code_html = "" # Ẩn luôn nếu NULL cho gọn
+                    else:
                         code_html = f'<span class="code-badge">{code_text}</span>'
-                    else: 
-                        code_html = ""
 
+                    # 3. Xử lý Message (Tách dòng chính/phụ để style đẹp hơn)
+                    msg_parts = item['msg'].split('<br>')
+                    main_msg = msg_parts[0]
+                    sub_msg = msg_parts[1] if len(msg_parts) > 1 else ""
+
+                    # 4. Render HTML Card (Cấu trúc mới)
                     st.markdown(f"""
-                    <div class="card-top {bg_cls}">
-                        <div class="room-header">
-                            <span>{icon} {item['r']}</span>
-                            {code_html}
+                    <div class="room-card-container {border_cls}">
+                        <div class="card-content">
+                            <div class="card-header-row">
+                                <div class="room-name-group">
+                                    <span class="room-icon">{icon}</span>
+                                    <span class="room-name">{item['r']}</span>
+                                </div>
+                                {code_html}
+                            </div>
+                            <div class="room-detail-msg">
+                                <div class="msg-main {text_cls}">{main_msg}</div>
+                                <div class="msg-sub">{sub_msg}</div>
+                            </div>
                         </div>
-                        <div class="room-info">{item['msg']}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
+                    # 5. Nút bấm (Đã được CSS để dính liền vào HTML trên)
+                    if st.button("Xem lịch chi tiết", key=f"btn_{item['r']}_{idx}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
-                        st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
+                        st.rerun()
 
 # --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
     c1, c2 = st.columns([1, 6])
     with c1:
+        st.markdown("<br>", unsafe_allow_html=True) # Căn chỉnh nút back
         if st.button("⬅️ Quay lại", key="btn_back"):
             st.session_state.view_mode = 'list'
-            st.rerun() # <--- SỬA LỖI Ở ĐÂY: DÙNG st.rerun()
+            st.rerun()
     with c2:
-        st.markdown(f"## 📅 Lịch học: **{r_name}** (Tuần {curr_week})")
+        st.markdown(f"## 📅 Lịch học: <span style='color:#0d6efd'>{r_name}</span> (Tuần {curr_week})", unsafe_allow_html=True)
         
     df_week = df[
         (df['MY_ROOM'] == r_name) & 
         (df['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week)))
     ].copy()
     
+    st.divider()
+    
     if df_week.empty:
-        st.info("Tuần này phòng trống hoàn toàn.")
+        st.info("Phòng này không có lịch học trong tuần này.")
     else:
         df_week['Day_Sort'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
         df_week = df_week.sort_values(by=['Day_Sort', 'Start'])
@@ -340,8 +409,13 @@ elif st.session_state.view_mode == 'detail':
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
             <div class="schedule-item">
-                <div style="font-weight:bold; font-size:1.1rem">Thứ {d} | {row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</div>
-                <div style="color:#d63384; font-weight:600">{row['MY_NAME']}</div>
-                <div style="font-size:0.9rem; color:#666">Mã lớp: {row['MY_CODE']}</div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span style="font-weight:bold; font-size:1.1rem">Thứ {d}</span>
+                    <span style="font-weight:bold; color:#555">{row['Start'][:2]}:{row['Start'][2:]} - {row['End'][:2]}:{row['End'][2:]}</span>
+                </div>
+                <div style="color:#d63384; font-weight:700; font-size: 1.05rem; margin-bottom: 5px;">{row['MY_NAME']}</div>
+                <div style="font-size:0.9rem; color:#666; display:flex; align-items:center;">
+                    <span style="margin-right: 10px;">📌 Mã lớp: <b>{row['MY_CODE']}</b></span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
