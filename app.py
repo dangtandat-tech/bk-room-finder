@@ -7,74 +7,39 @@ import os
 # --- 1. CẤU HÌNH ---
 st.set_page_config(page_title="BK Room Finder", page_icon="🏫", layout="wide")
 
-# --- 2. CSS (GIAO DIỆN CARD LIỀN KHỐI) ---
+# --- 2. CSS (FIX CARD LIỀN MẠCH) ---
 st.markdown("""
 <style>
-    /* Card Top (Thông tin) */
     .card-top {
-        padding: 12px 15px;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        color: white;
-        position: relative;
+        padding: 12px 15px; border-top-left-radius: 12px; border-top-right-radius: 12px;
+        color: white; position: relative;
     }
-    
-    /* Màu nền */
     .bg-free { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
     .bg-soon { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); color: #212529 !important; }
     .bg-busy { background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%); }
-
-    /* Typography */
-    .room-header { 
-        font-size: 1.3rem; font-weight: 800; 
-        display: flex; justify-content: space-between; align-items: center; 
-    }
-    .room-info { 
-        font-size: 0.9rem; margin-top: 6px; 
-        line-height: 1.4; opacity: 0.95; font-weight: 500;
-    }
+    .room-header { font-size: 1.3rem; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
+    .room-info { font-size: 0.9rem; margin-top: 6px; line-height: 1.4; opacity: 0.95; font-weight: 500; }
+    .code-badge { font-size: 0.75rem; background: rgba(255,255,255,0.25); padding: 3px 8px; border-radius: 6px; font-weight: normal; }
     
-    /* Badge Mã Lớp ("Cái ô lỗi") */
-    .code-badge { 
-        font-size: 0.75rem; 
-        background: rgba(255,255,255,0.25); 
-        padding: 3px 8px; 
-        border-radius: 6px; 
-        font-weight: bold; 
-        border: 1px solid rgba(255,255,255,0.4);
-        min-width: 60px;
-        text-align: center;
-    }
-
-    /* Nút bấm chìm bên dưới */
     div.stButton > button {
-        width: 100%;
-        border-radius: 0 0 12px 12px !important;
-        border: 1px solid #e0e0e0;
-        border-top: none;
-        background-color: #ffffff;
-        color: #666;
-        font-size: 0.85rem;
-        padding: 8px 0;
-        margin-top: -15px !important;
-        transition: all 0.2s;
+        width: 100%; border-radius: 0 0 12px 12px !important; border: 1px solid #e0e0e0;
+        border-top: none; background-color: #ffffff; color: #666; font-size: 0.85rem;
+        padding: 8px 0; margin-top: -15px !important; transition: all 0.2s;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     div.stButton > button:hover {
         background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd;
         box-shadow: 0 6px 12px rgba(0,0,0,0.1); transform: translateY(-2px); z-index: 1;
     }
-    
-    /* Layout */
     div[data-testid="column"] { padding: 0 6px; }
-    .header-info {
-        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
-        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
-    }
     .schedule-item {
         background: white; border-left: 5px solid #0d6efd;
         padding: 15px; margin-bottom: 12px; border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #333;
+    }
+    .header-info {
+        background-color: #f8f9fa; padding: 15px; border-radius: 12px;
+        margin-bottom: 25px; border: 1px solid #dee2e6; text-align: center; color: #333;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -89,37 +54,45 @@ def parse_weeks(w_str):
     try:
         parts = str(w_str).replace('"', '').split(',')
         for p in parts:
-            if '-' in p:
-                s, e = map(int, p.split('-'))
-                res.extend(range(s, e + 1))
-            else:
-                res.append(int(p))
+            if '-' in p: s, e = map(int, p.split('-')); res.extend(range(s, e + 1))
+            else: res.append(int(p))
     except: pass
     return res
 
 def parse_time(t_str):
     if pd.isna(t_str) or '-' not in str(t_str): return None, None
-    try:
-        s, e = str(t_str).split('-')
-        return s.strip().zfill(4), e.strip().zfill(4)
+    try: s, e = str(t_str).split('-'); return s.strip().zfill(4), e.strip().zfill(4)
     except: return None, None
 
-def check_week(w_str, current_week):
-    return str(current_week) in str(w_str).split(',')
-
-def clean_day(v):
+def check_week(w_str, current_week): return str(current_week) in str(w_str).split(',')
+def clean_day(v): 
     try: return str(int(float(v)))
     except: return str(v)
 
-# --- 4. LOAD DATA ---
+# --- 4. LOAD DATA (CHỐNG CRASH) ---
 @st.cache(allow_output_mutation=True)
 def load_and_process():
+    # Danh sách file cần load
     files = ['data1.csv', 'data2.csv', 'TKB20251-K70.xlsx - Sheet1.csv', 'TKB20251-Full1.xlsx - Sheet1.csv']
     dfs = []
     encodings = ['utf-8-sig', 'utf-16', 'utf-8', 'cp1258', 'latin1']
     
+    # Debug: In ra danh sách file thực tế để kiểm tra
+    server_files = os.listdir()
+    
     for f in files:
-        if not os.path.exists(f): continue
+        # Kiểm tra file có tồn tại không trước khi đọc
+        if not os.path.exists(f): 
+            # Thử tìm file tương tự (không phân biệt hoa thường)
+            found = False
+            for sf in server_files:
+                if sf.lower() == f.lower():
+                    f = sf # Dùng tên file thực tế tìm được
+                    found = True
+                    break
+            if not found:
+                continue # Nếu không tìm thấy file nào thì bỏ qua
+
         for enc in encodings:
             try:
                 df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
@@ -154,7 +127,7 @@ def load_and_process():
     df['MY_DAY']  = df_raw[c_day] if c_day else "2"
     df['MY_WEEK'] = df_raw[c_week] if c_week else ""
     df['MY_NAME'] = df_raw[c_name] if c_name else "Lớp học"
-    df['MY_CODE'] = df_raw[c_code].fillna("") if c_code else "" # Fillna để tránh lỗi
+    df['MY_CODE'] = df_raw[c_code] if c_code else ""
 
     df = df.dropna(subset=['MY_ROOM', 'MY_TIME'])
     df = df[df['MY_ROOM'] != 'NULL']
@@ -181,12 +154,19 @@ if 'current_time' not in st.session_state: st.session_state.current_time = datet
 
 st.title("🏫 Tra Cứu Phòng Trống BK")
 
-df = load_and_process()
-if df.empty:
-    st.error("Chưa có dữ liệu.")
+# Load data an toàn
+try:
+    df = load_and_process()
+except Exception as e:
+    st.error(f"Lỗi khi xử lý dữ liệu: {e}")
     st.stop()
 
-# Time Logic
+if df.empty:
+    st.warning("⚠️ Không tìm thấy dữ liệu! Hãy kiểm tra lại file `data1.csv` và `data2.csv` trên GitHub.")
+    st.info(f"Các file hiện có trên server: {os.listdir()}")
+    st.stop()
+
+# Time
 now = st.session_state.current_time
 now_naive = now.replace(tzinfo=None)
 delta = now_naive - START_DATE_K70
@@ -194,9 +174,8 @@ curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
 curr_wd = py_to_bk.get(now.weekday(), '2')
 
-# --- MÀN HÌNH 1: DANH SÁCH ---
+# --- MÀN HÌNH 1: LIST ---
 if st.session_state.view_mode == 'list':
-    # Sidebar
     st.sidebar.header("🔍 Bộ Lọc")
     with st.sidebar.expander("🛠️ Chỉnh giờ"):
         if st.checkbox("Chỉnh tay"):
@@ -218,12 +197,10 @@ if st.session_state.view_mode == 'list':
     </div>
     """, unsafe_allow_html=True)
 
-    # Filter
     df_b = df[df['Building'] == sel_b]
     df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
     df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-    # --- LOGIC STATUS (ĐÃ SỬA THEO YÊU CẦU) ---
     def get_status(schedule, c_time_full):
         c_hm = c_time_full.hour * 60 + c_time_full.minute
         slots = []
@@ -231,53 +208,32 @@ if st.session_state.view_mode == 'list':
             try:
                 sh, sm = int(row['Start'][:2]), int(row['Start'][2:])
                 eh, em = int(row['End'][:2]), int(row['End'][2:])
-                s_val = sh * 60 + sm
-                e_val = eh * 60 + em
-                # Lưu cả Mã lớp (code) vào slots
-                slots.append({
-                    'start_val': s_val, 'end_val': e_val, 
-                    'name': row['MY_NAME'], 'code': row['MY_CODE'], 
-                    'end_str': f"{eh:02d}:{em:02d}", 'start_str': f"{sh:02d}:{sm:02d}"
-                })
+                slots.append({'s': sh*60+sm, 'e': eh*60+em, 'n': row['MY_NAME'], 'c': row['MY_CODE'], 'es': f"{eh:02d}:{em:02d}", 'ss': f"{sh:02d}:{sm:02d}"})
             except: continue
+        slots.sort(key=lambda x: x['s'])
         
-        slots.sort(key=lambda x: x['start_val'])
-        
-        # 1. Check Đang học -> Trả về Mã lớp Đang học
         for x in slots:
-            if x['start_val'] <= c_hm <= x['end_val']:
-                l = x['end_val'] - c_hm
-                h, m = l // 60, l % 60
-                return "BUSY", f"ĐANG HỌC: {x['name']}<br>Đến: {x['end_str']} (Còn {h}h {m}p)", 3, x['code']
-        
-        # 2. Check Sắp học -> Trả về Mã lớp Tiếp theo
+            if x['s'] <= c_hm <= x['e']:
+                l = x['e'] - c_hm
+                return "BUSY", f"ĐANG HỌC: {x['n']}<br>Đến: {x['es']} (Còn {l//60}h{l%60}p)", 3, x['c']
         for x in slots:
-            if x['start_val'] > c_hm:
-                diff = x['start_val'] - c_hm
-                h, m = diff // 60, diff % 60
-                t_str = f"{h}h {m}p" if h > 0 else f"{m}p"
-                next_txt = f"Sau: {x['name']} ({x['start_str']})"
-                
-                if diff >= 45: 
-                    return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['code'] # Mã tiết sau
-                else: 
-                    return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['code'] # Mã tiết sau
-        
-        # 3. Hết tiết -> Trả về NULL
+            if x['s'] > c_hm:
+                diff = x['s'] - c_hm
+                t_str = f"{diff//60}h{diff%60}p" if diff//60 > 0 else f"{diff%60}p"
+                next_txt = f"Sau: {x['n']} ({x['ss']})"
+                if diff >= 45: return "FREE", f"TRỐNG: {t_str}<br>{next_txt}", 1, x['c']
+                else: return "SOON", f"Sắp học trong {t_str}<br>{next_txt}", 2, x['c']
         return "FREE", "TRỐNG đến hết ngày hôm nay", 0, "NULL"
 
-    # Prepare Results
     rooms = sorted(df_b['MY_ROOM'].unique())
     results = []
     for r in rooms:
         r_sch = df_active[df_active['MY_ROOM'] == r]
-        # Lấy đủ 4 biến trả về
         stt, msg, prio, code = get_status(r_sch, now)
         results.append({"r": r, "msg": msg, "st": stt, "prio": prio, "code": code})
     
     results.sort(key=lambda x: (x['prio'], x['r']))
 
-    # RENDER GRID
     if not results:
         st.info("Không có dữ liệu.")
     else:
@@ -286,26 +242,15 @@ if st.session_state.view_mode == 'list':
             cols = st.columns(chunk_size)
             for idx, item in enumerate(results[i:i+chunk_size]):
                 with cols[idx]:
-                    # Determine Style
-                    if item['st'] == 'FREE': 
-                        bg_cls, icon = "bg-free", "✅"
-                    elif item['st'] == 'SOON': 
-                        bg_cls, icon = "bg-soon", "⚠️"
-                    else: 
-                        bg_cls, icon = "bg-busy", "⛔"
+                    if item['st'] == 'FREE': bg_cls, icon = "bg-free", "✅"
+                    elif item['st'] == 'SOON': bg_cls, icon = "bg-soon", "⚠️"
+                    else: bg_cls, icon = "bg-busy", "⛔"
                     
-                    # Logic Hiển thị Badge Code
                     code_text = item['code']
-                    if code_text == "NULL":
-                        # Nếu hết tiết -> Ghi NULL (hoặc ẩn nếu muốn)
-                        code_html = f'<span class="code-badge" style="background:rgba(0,0,0,0.1); border:none">NULL</span>'
-                    elif code_text:
-                        # Nếu có mã -> Hiển thị
-                        code_html = f'<span class="code-badge">{code_text}</span>'
-                    else:
-                        code_html = ""
+                    if code_text == "NULL": code_html = '<span class="code-badge" style="opacity:0.5">NULL</span>'
+                    elif code_text: code_html = f'<span class="code-badge">{code_text}</span>'
+                    else: code_html = ""
 
-                    # Card HTML
                     st.markdown(f"""
                     <div class="card-top {bg_cls}">
                         <div class="room-header">
@@ -316,16 +261,14 @@ if st.session_state.view_mode == 'list':
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Button Streamlit
                     if st.button("📅 Xem chi tiết", key=f"btn_{item['r']}"):
                         st.session_state.selected_room_data = item['r']
                         st.session_state.view_mode = 'detail'
                         st.experimental_rerun()
 
-# --- MÀN HÌNH 2: CHI TIẾT ---
+# --- MÀN HÌNH 2: DETAIL ---
 elif st.session_state.view_mode == 'detail':
     r_name = st.session_state.selected_room_data
-    
     c1, c2 = st.columns([1, 6])
     with c1:
         if st.button("⬅️ Quay lại"):
@@ -344,7 +287,6 @@ elif st.session_state.view_mode == 'detail':
     else:
         df_week['Day_Sort'] = df_week['MY_DAY'].apply(lambda x: int(float(x)) if x else 0)
         df_week = df_week.sort_values(by=['Day_Sort', 'Start'])
-        
         for _, row in df_week.iterrows():
             d = str(int(float(row['MY_DAY'])))
             st.markdown(f"""
