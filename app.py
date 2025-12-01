@@ -108,7 +108,6 @@ def load_and_process_data():
     df['End'] = t_parsed.apply(lambda x: x[1])
     df = df.dropna(subset=['Start', 'End'])
 
-    # Tách Tòa: Lấy phần trước dấu gạch ngang
     def extract_building(room_name):
         s = str(room_name).strip()
         if '-' in s: return s.split('-')[0]
@@ -122,29 +121,25 @@ st.title("🏫 Tra Cứu Phòng Trống BK")
 
 df = load_and_process_data()
 if df.empty:
-    st.error("Chưa load được dữ liệu. Hãy kiểm tra lại tên file trên GitHub.")
+    st.error("Chưa load được dữ liệu. Kiểm tra file csv.")
     st.stop()
 
 # Sidebar
 st.sidebar.header("🔍 Bộ Lọc")
 
-# === FIX LỖI MÚI GIỜ Ở ĐÂY ===
-tz_VN = pytz.timezone('Asia/Ho_Chi_Minh') # Định nghĩa múi giờ VN
+tz_VN = pytz.timezone('Asia/Ho_Chi_Minh')
 
 with st.sidebar.expander("🛠️ Chỉnh giờ (Test)"):
     if st.checkbox("Bật chỉnh tay"):
         d_input = st.date_input("Ngày", datetime.now(tz_VN))
         t_input = st.time_input("Giờ", datetime.now(tz_VN).time())
-        # Kết hợp ngày giờ và gán timezone VN
         now = datetime.combine(d_input, t_input)
-        now = tz_VN.localize(now) 
+        now = tz_VN.localize(now)
     else:
-        # Lấy giờ thực tế tại VN
         now = datetime.now(tz_VN)
         if st.button("Cập nhật giờ"): st.experimental_rerun()
 
-# Tính tuần (cần loại bỏ timezone để trừ ngày tháng)
-now_naive = now.replace(tzinfo=None) # Đưa về dạng không múi giờ để tính toán ngày
+now_naive = now.replace(tzinfo=None)
 delta = now_naive - START_DATE_K70
 curr_week = (delta.days // 7) + 1 if delta.days >= 0 else 0
 py_to_bk = {0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8'}
@@ -170,23 +165,15 @@ df_today = df_b[df_b['MY_DAY'].apply(clean_day) == curr_wd]
 def check_week(w, cw): return str(cw) in str(w).split(',')
 df_active = df_today[df_today['Parsed_Weeks'].apply(lambda x: check_week(x, curr_week))]
 
-# Check Status (Lưu ý: c_time ở đây đã có timezone VN nếu lấy auto, hoặc có tz nếu chỉnh tay)
-# Nhưng dữ liệu lịch học (Start/End) là chuỗi giờ phút thuần túy (HHMM)
-# Cần so sánh cẩn thận
 def get_status(schedule, c_time_full):
-    # Lấy giờ phút hiện tại để so sánh
     c_hm = c_time_full.hour * 60 + c_time_full.minute
-    
     slots = []
     for _, row in schedule.iterrows():
         try:
-            # Đổi giờ học ra phút (Ví dụ: 0645 -> 6*60 + 45 = 405)
             s_h, s_m = int(row['Start'][:2]), int(row['Start'][2:])
             e_h, e_m = int(row['End'][:2]), int(row['End'][2:])
-            
             s_val = s_h * 60 + s_m
             e_val = e_h * 60 + e_m
-            
             slots.append((s_val, e_val, row['MY_NAME'], f"{s_h:02d}:{s_m:02d}", f"{e_h:02d}:{e_m:02d}"))
         except: continue
     
@@ -224,20 +211,26 @@ for r in rooms:
 
 results.sort(key=lambda x: (x['prio'], x['r']))
 
-cols = st.columns(4)
+# --- HIỂN THỊ: CHIA ROW ĐỂ GIỮ THỨ TỰ TRÊN MOBILE ---
 if not results:
     st.info(f"Không có dữ liệu cho tòa {selected_b}.")
 else:
-    for i, item in enumerate(results):
-        if item['st'] == 'FREE': cls, icon = "status-free", "✅"
-        elif item['st'] == 'SOON': cls, icon = "status-soon", "⚠️"
-        else: cls, icon = "status-busy", "⛔"
+    # Chia danh sách thành các nhóm (rows), mỗi nhóm 4 phần tử
+    chunk_size = 4
+    for i in range(0, len(results), chunk_size):
+        row_items = results[i:i+chunk_size]
+        cols = st.columns(chunk_size) # Tạo cột động theo số phần tử còn lại
         
-        html = f"""
-        <div class="room-card {cls}">
-            <div class="room-name">{icon} {item['r']}</div>
-            <div class="room-status">{item['msg']}</div>
-        </div>
-        """
-        with cols[i % 4]:
-            st.markdown(html, unsafe_allow_html=True)
+        for idx, item in enumerate(row_items):
+            if item['st'] == 'FREE': cls, icon = "status-free", "✅"
+            elif item['st'] == 'SOON': cls, icon = "status-soon", "⚠️"
+            else: cls, icon = "status-busy", "⛔"
+            
+            html = f"""
+            <div class="room-card {cls}">
+                <div class="room-name">{icon} {item['r']}</div>
+                <div class="room-status">{item['msg']}</div>
+            </div>
+            """
+            with cols[idx]:
+                st.markdown(html, unsafe_allow_html=True)
