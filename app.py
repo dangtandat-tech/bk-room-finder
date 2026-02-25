@@ -130,6 +130,7 @@ START_DATE_K70 = datetime(2025, 9, 8)
 TZ_VN = pytz.timezone('Asia/Ho_Chi_Minh')
 
 # --- 3. HELPER FUNCTIONS ---
+# --- 3. HELPER FUNCTIONS ---
 def parse_weeks(w_str):
     if pd.isna(w_str): return []
     res = []
@@ -148,7 +149,10 @@ def parse_time(t_str):
     if pd.isna(t_str) or '-' not in str(t_str): return None, None
     try:
         s, e = str(t_str).split('-')
-        return s.strip().zfill(4), e.strip().zfill(4)
+        # Loại bỏ dấu ":" nếu có (VD: 06:45) và đảm bảo luôn đủ 4 chữ số
+        s = s.replace(':', '').strip().zfill(4)
+        e = e.replace(':', '').strip().zfill(4)
+        return s, e
     except: return None, None
 
 def check_week(w_str, current_week):
@@ -173,7 +177,8 @@ def load_and_process():
             else: continue
         for enc in encodings:
             try:
-                df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str)
+                # FIX QUAN TRỌNG: Thêm index_col=False để chống lệch cột do dấu phẩy thừa
+                df_t = pd.read_csv(f, skiprows=2, encoding=enc, sep=None, engine='python', dtype=str, index_col=False)
                 if df_t.shape[1] > 1:
                     df_t.columns = df_t.columns.str.strip().str.replace('\ufeff', '')
                     dfs.append(df_t)
